@@ -1,0 +1,124 @@
+@*
+    ApproverList.razor — Component for adding and removing approvers from a memo.
+    Provides a simple text input for approver email address lookup.
+    In a production system, this would have autocomplete from the user database.
+*@
+@using CorporateMemo.Application.Memos.Commands
+@using CorporateMemo.Domain.Entities
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<ApplicationUser> UserManager
+
+<div>
+    @* Current approvers list *@
+    @if (Approvers.Any())
+    {
+        <ul class="list-group mb-3" role="list" aria-label="Assigned approvers">
+            @{
+                var approverIndex = 0;
+            }
+            @foreach (var approver in Approvers)
+            {
+                var currentApprover = approver;
+                var index = approverIndex;
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-person-check me-2 text-success" aria-hidden="true"></i>
+                        <strong>@approver.DisplayName</strong>
+                        <small class="text-muted ms-2">@approver.Email</small>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-danger btn-sm"
+                            @onclick="() => RemoveApprover(currentApprover)"
+                            aria-label="Remove approver: @approver.DisplayName">
+                        <i class="bi bi-trash" aria-hidden="true"></i>
+                    </button>
+                </li>
+                approverIndex++;
+            }
+        </ul>
+    }
+    else
+    {
+        <p class="text-muted small fst-italic mb-3">
+            No approvers assigned. Submit will auto-publish the memo.
+        </p>
+    }
+
+    @* Add approver by email *@
+    <div class="input-group">
+        <input type="email"
+               class="form-control"
+               placeholder="Enter approver email address..."
+               @bind="_searchEmail"
+               @bind:event="oninput"
+               aria-label="Approver email address" />
+        <button class="btn btn-outline-primary"
+                type="button"
+                @onclick="AddApproverByEmail"
+                disabled="@(string.IsNullOrWhiteSpace(_searchEmail))">
+            <i class="bi bi-person-plus me-1" aria-hidden="true"></i>Add
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="text-danger small mt-1">
+            <i class="bi bi-exclamation-circle me-1"></i>@_errorMessage
+        </div>
+    }
+</div>
+
+@code {
+    private string _searchEmail = string.Empty;
+    private string? _errorMessage;
+
+    /// <summary>Gets or sets the current list of approvers.</summary>
+    [Parameter] public List<ApproverInfo> Approvers { get; set; } = new();
+
+    /// <summary>Gets or sets the callback invoked when the approver list changes.</summary>
+    [Parameter] public EventCallback<List<ApproverInfo>> ApproversChanged { get; set; }
+
+    private async Task AddApproverByEmail()
+    {
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_searchEmail))
+            return;
+
+        // Look up the user by email in the Identity database
+        var user = await UserManager.FindByEmailAsync(_searchEmail.Trim());
+        if (user == null)
+        {
+            _errorMessage = $"No user found with email '{_searchEmail}'. Please check the email address.";
+            return;
+        }
+
+        // Check for duplicates
+        if (Approvers.Any(a => a.UserId == user.Id))
+        {
+            _errorMessage = "This user is already in the approver list.";
+            return;
+        }
+
+        // Add the approver
+        var newApprovers = new List<ApproverInfo>(Approvers)
+        {
+            new ApproverInfo
+            {
+                UserId = user.Id,
+                DisplayName = user.DisplayName,
+                Email = user.Email ?? _searchEmail
+            }
+        };
+
+        await ApproversChanged.InvokeAsync(newApprovers);
+        _searchEmail = string.Empty;
+    }
+
+    private async Task RemoveApprover(ApproverInfo approver)
+    {
+        var newApprovers = new List<ApproverInfo>(Approvers);
+        newApprovers.Remove(approver);
+        await ApproversChanged.InvokeAsync(newApprovers);
+    }
+}

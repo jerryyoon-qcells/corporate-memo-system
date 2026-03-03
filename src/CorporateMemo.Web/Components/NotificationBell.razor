@@ -1,0 +1,87 @@
+@*
+    NotificationBell.razor — Bell icon in the navbar showing unread notification count.
+    Clicking the bell opens the notification panel (offcanvas drawer).
+    The unread count badge is refreshed periodically and on notification panel close.
+*@
+@using CorporateMemo.Application.Interfaces
+@using CorporateMemo.Application.DTOs
+@using CorporateMemo.Domain.Entities
+@inject INotificationService NotificationService
+@inject AuthenticationStateProvider AuthProvider
+
+@* Bell icon button with unread count badge *@
+<div class="position-relative d-inline-block">
+    <button class="btn btn-outline-light btn-sm position-relative"
+            type="button"
+            @onclick="TogglePanel"
+            aria-label="Notifications (@_unreadCount unread)">
+        <i class="bi bi-bell-fill" aria-hidden="true"></i>
+        @* Show the unread count badge only if there are unread notifications *@
+        @if (_unreadCount > 0)
+        {
+            <span class="badge bg-danger notification-badge" aria-hidden="true">
+                @(_unreadCount > 99 ? "99+" : _unreadCount.ToString())
+            </span>
+        }
+    </button>
+</div>
+
+@* Notification panel — shown/hidden based on _isPanelOpen *@
+<NotificationPanel IsOpen="_isPanelOpen"
+                   Notifications="_notifications"
+                   OnClose="ClosePanel" />
+
+@code {
+    private int _unreadCount;
+    private bool _isPanelOpen;
+    private List<NotificationDto> _notifications = new();
+    private string? _userId;
+
+    /// <summary>On component initialization, load the unread notification count.</summary>
+    protected override async Task OnInitializedAsync()
+    {
+        // Get the current user's ID from the authentication state
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        _userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (_userId != null)
+        {
+            _unreadCount = await NotificationService.GetUnreadCountAsync(_userId);
+        }
+    }
+
+    private async Task TogglePanel()
+    {
+        if (!_isPanelOpen)
+        {
+            // Load notifications when opening the panel
+            if (_userId != null)
+            {
+                _notifications = (await NotificationService.GetNotificationsAsync(_userId))
+                    .Select(n => new NotificationDto
+                    {
+                        Id = n.Id,
+                        UserId = n.UserId,
+                        Message = n.Message,
+                        Type = n.Type,
+                        IsRead = n.IsRead,
+                        CreatedAt = n.CreatedAt,
+                        MemoId = n.MemoId
+                    }).ToList();
+            }
+        }
+        _isPanelOpen = !_isPanelOpen;
+    }
+
+    private async Task ClosePanel()
+    {
+        _isPanelOpen = false;
+
+        // Mark all notifications as read when the panel is closed
+        if (_userId != null)
+        {
+            await NotificationService.MarkAllReadAsync(_userId);
+            _unreadCount = 0; // Reset the badge count immediately
+        }
+    }
+}

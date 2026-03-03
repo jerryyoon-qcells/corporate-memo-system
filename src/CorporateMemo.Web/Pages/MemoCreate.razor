@@ -1,0 +1,500 @@
+@*
+    MemoCreate.razor — Two-column memo creation form.
+    Left column: Title, Content, Attachments.
+    Right column: MemoNumber (read-only), Author (read-only), Tags, To/CC recipients, Approvers, Confidential toggle.
+    Action buttons: Save as Draft, Submit.
+*@
+@page "/memo/create"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using CorporateMemo.Application.DTOs
+@using CorporateMemo.Application.Memos.Commands
+@using CorporateMemo.Domain.Entities
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Identity
+@inject MediatR.IMediator Mediator
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ILogger<MemoCreate> Logger
+
+<PageTitle>New Memo — Corporate Memo System</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1">
+                <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">New Memo</li>
+            </ol>
+        </nav>
+        <h1 class="fs-2 fw-bold text-dark mb-0">New Memo</h1>
+    </div>
+</div>
+
+@* Success/error toasts *@
+@if (!string.IsNullOrEmpty(_successMessage))
+{
+    <div class="alert alert-success d-flex align-items-center" role="alert">
+        <i class="bi bi-check-circle-fill me-2" aria-hidden="true"></i>
+        @_successMessage
+    </div>
+}
+@if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <div class="alert alert-danger d-flex align-items-center" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
+        @_errorMessage
+    </div>
+}
+
+<div class="row g-4">
+    @* ============================
+       LEFT COLUMN — Main content
+       ============================ *@
+    <div class="col-12 col-lg-7">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
+                @* Title field *@
+                <div class="mb-3">
+                    <label for="memo-title" class="form-label fw-semibold">
+                        Title <span class="required-indicator" aria-hidden="true">*</span>
+                    </label>
+                    <input id="memo-title"
+                           type="text"
+                           class="form-control @(!string.IsNullOrEmpty(_titleError) ? "is-invalid" : "")"
+                           maxlength="100"
+                           @bind="_title"
+                           @bind:event="oninput"
+                           placeholder="Enter memo title..."
+                           aria-required="true"
+                           aria-describedby="title-help" />
+                    <div id="title-help" class="d-flex justify-content-between">
+                        @if (!string.IsNullOrEmpty(_titleError))
+                        {
+                            <span class="text-danger small">@_titleError</span>
+                        }
+                        else
+                        {
+                            <span></span>
+                        }
+                        <small class="text-muted">@_title.Length / 100</small>
+                    </div>
+                </div>
+
+                @* Content field *@
+                <div class="mb-3">
+                    <label for="memo-content" class="form-label fw-semibold">
+                        Content <span class="required-indicator" aria-hidden="true">*</span>
+                    </label>
+                    <textarea id="memo-content"
+                              class="form-control @(!string.IsNullOrEmpty(_contentError) ? "is-invalid" : "")"
+                              rows="12"
+                              maxlength="10000"
+                              @bind="_content"
+                              @bind:event="oninput"
+                              placeholder="Enter memo content..."
+                              aria-required="true"
+                              aria-describedby="content-help"
+                              style="font-size: 0.95rem; line-height: 1.6;"></textarea>
+                    <div id="content-help" class="d-flex justify-content-between">
+                        @if (!string.IsNullOrEmpty(_contentError))
+                        {
+                            <span class="text-danger small">@_contentError</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted small">Plain text equivalent maximum: 1,000 characters</span>
+                        }
+                        <small class="text-muted">@_content.Length / 10000</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Attachments *@
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h2 class="fs-5 fw-semibold mb-3">
+                    <i class="bi bi-paperclip me-2" aria-hidden="true"></i>Attachments
+                </h2>
+                <AttachmentUpload Attachments="_attachments"
+                                  OnFileSelected="HandleFileSelected"
+                                  OnAttachmentRemoved="HandleAttachmentRemoved" />
+            </div>
+        </div>
+    </div>
+
+    @* ============================
+       RIGHT COLUMN — Metadata
+       ============================ *@
+    <div class="col-12 col-lg-5">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
+                @* Memo Number (read-only) *@
+                <div class="mb-3">
+                    <label class="form-label fw-semibold text-muted small text-uppercase">Memo Number</label>
+                    <div class="form-control-plaintext memo-number text-muted">Auto-assigned on save</div>
+                </div>
+
+                @* Author (read-only) *@
+                <div class="mb-3">
+                    <label class="form-label fw-semibold text-muted small text-uppercase">Author</label>
+                    <div class="form-control-plaintext">
+                        <strong>@_authorName</strong>
+                        <br /><small class="text-muted">@_authorEmail</small>
+                    </div>
+                </div>
+
+                @* Tags *@
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-hash me-1" aria-hidden="true"></i>Tags
+                    </label>
+                    <TagInput Tags="_tags" TagsChanged="tags => _tags = tags" />
+                </div>
+
+                @* To Recipients *@
+                <div class="mb-3">
+                    <label for="to-recipients" class="form-label fw-semibold">
+                        To (Recipients) <span class="required-indicator" aria-hidden="true">*</span>
+                    </label>
+                    <input id="to-recipients"
+                           type="text"
+                           class="form-control"
+                           placeholder="Enter email, press Enter to add..."
+                           @onkeydown="@(async e => { if (e.Key == "Enter") await AddToRecipient(); })"
+                           @bind="_toInput"
+                           @bind:event="oninput" />
+                    @* Display added recipients as chips *@
+                    <div class="d-flex flex-wrap gap-1 mt-1">
+                        @foreach (var r in _toRecipients)
+                        {
+                            var recipient = r;
+                            <span class="badge bg-primary">
+                                @recipient
+                                <button type="button" class="btn-close btn-close-white ms-1"
+                                        style="font-size: 0.5rem;"
+                                        @onclick="() => _toRecipients.Remove(recipient)"
+                                        aria-label="Remove @recipient"></button>
+                            </span>
+                        }
+                    </div>
+                </div>
+
+                @* CC Recipients *@
+                <div class="mb-3">
+                    <label for="cc-recipients" class="form-label fw-semibold">CC (Optional)</label>
+                    <input id="cc-recipients"
+                           type="text"
+                           class="form-control"
+                           placeholder="Enter email, press Enter to add..."
+                           @onkeydown="@(async e => { if (e.Key == "Enter") await AddCcRecipient(); })"
+                           @bind="_ccInput"
+                           @bind:event="oninput" />
+                    <div class="d-flex flex-wrap gap-1 mt-1">
+                        @foreach (var r in _ccRecipients)
+                        {
+                            var recipient = r;
+                            <span class="badge bg-secondary">
+                                @recipient
+                                <button type="button" class="btn-close btn-close-white ms-1"
+                                        style="font-size: 0.5rem;"
+                                        @onclick="() => _ccRecipients.Remove(recipient)"
+                                        aria-label="Remove @recipient"></button>
+                            </span>
+                        }
+                    </div>
+                </div>
+
+                @* Approvers *@
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-person-check me-1" aria-hidden="true"></i>Approvers
+                    </label>
+                    <ApproverList Approvers="_approvers"
+                                  ApproversChanged="approvers => _approvers = approvers" />
+                </div>
+
+                @* Confidential toggle *@
+                <div class="mb-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="confidential-toggle"
+                               @bind="_isConfidential"
+                               role="switch" />
+                        <label class="form-check-label fw-semibold" for="confidential-toggle">
+                            <i class="bi bi-lock me-1" aria-hidden="true"></i>Confidential
+                        </label>
+                    </div>
+                    <small class="text-muted">Mark this memo as confidential.</small>
+                </div>
+            </div>
+        </div>
+
+        @* Action buttons *@
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    @* Save as Draft *@
+                    <button class="btn btn-outline-secondary"
+                            type="button"
+                            @onclick="SaveAsDraft"
+                            disabled="@_isSubmitting">
+                        @if (_isSubmitting && _submitAction == "draft")
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        }
+                        <i class="bi bi-save me-2" aria-hidden="true"></i>Save as Draft
+                    </button>
+
+                    @* Submit *@
+                    <button class="btn btn-primary"
+                            type="button"
+                            @onclick="SubmitMemo"
+                            disabled="@_isSubmitting">
+                        @if (_isSubmitting && _submitAction == "submit")
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        }
+                        <i class="bi bi-send me-2" aria-hidden="true"></i>
+                        @(_approvers.Any() ? "Submit for Approval" : "Submit & Publish")
+                    </button>
+
+                    @* Cancel *@
+                    <a href="/" class="btn btn-link text-muted text-decoration-none">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Form fields
+    private string _title = string.Empty;
+    private string _content = string.Empty;
+    private List<string> _tags = new();
+    private List<string> _toRecipients = new();
+    private List<string> _ccRecipients = new();
+    private List<ApproverInfo> _approvers = new();
+    private List<AttachmentDto> _attachments = new();
+    private bool _isConfidential;
+
+    // Temporary input values for recipient fields
+    private string _toInput = string.Empty;
+    private string _ccInput = string.Empty;
+
+    // Author info (populated on init from auth state)
+    private string _authorName = string.Empty;
+    private string _authorEmail = string.Empty;
+    private string _authorId = string.Empty;
+
+    // UI state
+    private bool _isSubmitting;
+    private string _submitAction = string.Empty;
+    private string? _successMessage;
+    private string? _errorMessage;
+    private string? _titleError;
+    private string? _contentError;
+
+    // The created memo ID (used after save to redirect to detail page)
+    private Guid? _createdMemoId;
+
+    /// <summary>On initialization, populate author info from the authenticated user.</summary>
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (userId != null)
+        {
+            var user = await UserManager.FindByIdAsync(userId);
+            if (user != null)
+            {
+                _authorId = user.Id;
+                _authorName = user.DisplayName;
+                _authorEmail = user.Email ?? string.Empty;
+            }
+        }
+    }
+
+    private async Task AddToRecipient()
+    {
+        var email = _toInput.Trim();
+        if (!string.IsNullOrEmpty(email) && !_toRecipients.Contains(email))
+            _toRecipients.Add(email);
+        _toInput = string.Empty;
+    }
+
+    private async Task AddCcRecipient()
+    {
+        var email = _ccInput.Trim();
+        if (!string.IsNullOrEmpty(email) && !_ccRecipients.Contains(email))
+            _ccRecipients.Add(email);
+        _ccInput = string.Empty;
+    }
+
+    private bool ValidateForm()
+    {
+        _titleError = null;
+        _contentError = null;
+
+        var isValid = true;
+
+        if (string.IsNullOrWhiteSpace(_title))
+        {
+            _titleError = "Title is required.";
+            isValid = false;
+        }
+        else if (_title.Length > 100)
+        {
+            _titleError = "Title cannot exceed 100 characters.";
+            isValid = false;
+        }
+
+        if (string.IsNullOrWhiteSpace(_content))
+        {
+            _contentError = "Content is required.";
+            isValid = false;
+        }
+
+        return isValid;
+    }
+
+    private async Task SaveAsDraft()
+    {
+        if (!ValidateForm()) return;
+
+        _isSubmitting = true;
+        _submitAction = "draft";
+        _errorMessage = null;
+
+        try
+        {
+            var command = BuildCreateCommand();
+            var result = await Mediator.Send(command);
+            _createdMemoId = result.Id;
+            _successMessage = $"Memo saved as draft: {result.MemoNumber}";
+
+            // Navigate to the edit page so the user can continue editing the saved draft
+            Nav.NavigateTo($"/memo/edit/{result.Id}");
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _errorMessage = string.Join("; ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "An error occurred while saving the memo. Please try again.";
+            Logger.LogError(ex, "Error saving memo as draft");
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task SubmitMemo()
+    {
+        if (!ValidateForm()) return;
+
+        if (!_toRecipients.Any())
+        {
+            _errorMessage = "At least one To recipient is required before submitting.";
+            return;
+        }
+
+        _isSubmitting = true;
+        _submitAction = "submit";
+        _errorMessage = null;
+
+        try
+        {
+            // First create the memo as draft
+            var createCommand = BuildCreateCommand();
+            var created = await Mediator.Send(createCommand);
+
+            // Then submit it
+            var submitCommand = new SubmitMemoCommand
+            {
+                MemoId = created.Id,
+                BaseUrl = Nav.BaseUri.TrimEnd('/')
+            };
+            var submitted = await Mediator.Send(submitCommand);
+
+            Nav.NavigateTo($"/memo/{submitted.Id}");
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _errorMessage = string.Join("; ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "An error occurred while submitting the memo. Please try again.";
+            Logger.LogError(ex, "Error submitting memo");
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private CreateMemoCommand BuildCreateCommand()
+    {
+        return new CreateMemoCommand
+        {
+            Title = _title.Trim(),
+            Content = _content,
+            Tags = _tags,
+            ToRecipients = _toRecipients,
+            CcRecipients = _ccRecipients,
+            Approvers = _approvers,
+            IsConfidential = _isConfidential
+        };
+    }
+
+    private async Task HandleFileSelected(Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
+    {
+        // After memo is created, upload the attachment
+        if (_createdMemoId.HasValue)
+        {
+            try
+            {
+                using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+                var command = new UploadAttachmentCommand
+                {
+                    MemoId = _createdMemoId.Value,
+                    FileName = file.Name,
+                    ContentType = file.ContentType,
+                    FileStream = stream,
+                    FileSizeBytes = file.Size
+                };
+                var attachment = await Mediator.Send(command);
+                _attachments.Add(attachment);
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = $"Failed to upload file '{file.Name}': {ex.Message}";
+            }
+        }
+        else
+        {
+            // Queue attachment for upload after memo is created
+            _errorMessage = "Please save the memo as a draft first before uploading attachments.";
+        }
+    }
+
+    private async Task HandleAttachmentRemoved(Guid attachmentId)
+    {
+        if (_createdMemoId.HasValue)
+        {
+            var command = new DeleteAttachmentCommand
+            {
+                MemoId = _createdMemoId.Value,
+                AttachmentId = attachmentId
+            };
+            await Mediator.Send(command);
+        }
+        _attachments.RemoveAll(a => a.Id == attachmentId);
+    }
+}

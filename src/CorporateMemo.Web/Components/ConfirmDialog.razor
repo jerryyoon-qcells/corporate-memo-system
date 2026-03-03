@@ -1,0 +1,106 @@
+@*
+    ConfirmDialog.razor — A reusable Bootstrap modal dialog for confirm/cancel actions.
+    Used for destructive actions like Delete and Reject to require explicit user confirmation.
+
+    Usage example:
+    <ConfirmDialog @ref="_deleteDialog"
+                   Title="Delete Memo"
+                   Message="Are you sure you want to permanently delete this memo?"
+                   ConfirmText="Delete"
+                   ConfirmClass="btn-danger"
+                   OnConfirmed="HandleDeleteConfirmed" />
+*@
+
+@* The Bootstrap modal HTML structure *@
+<div class="modal fade @(_isVisible ? "show d-block" : "")"
+     tabindex="-1"
+     role="dialog"
+     aria-modal="@_isVisible"
+     aria-labelledby="confirmDialogTitle"
+     style="@(_isVisible ? "background-color: rgba(0,0,0,0.5);" : "")">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmDialogTitle">@Title</h5>
+                <button type="button"
+                        class="btn-close"
+                        aria-label="Close"
+                        @onclick="Cancel"></button>
+            </div>
+            <div class="modal-body">
+                <p>@Message</p>
+            </div>
+            <div class="modal-footer">
+                @* Cancel button — closes the dialog without any action *@
+                <button type="button" class="btn btn-secondary" @onclick="Cancel">
+                    @CancelText
+                </button>
+                @* Confirm button — triggers the OnConfirmed callback *@
+                <button type="button" class="btn @ConfirmClass" @onclick="Confirm" disabled="@_isProcessing">
+                    @if (_isProcessing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                    }
+                    @ConfirmText
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Whether the dialog is currently visible
+    private bool _isVisible;
+    // Whether the confirm action is being processed (shows spinner, disables button)
+    private bool _isProcessing;
+
+    /// <summary>Gets or sets the dialog title displayed in the modal header.</summary>
+    [Parameter] public string Title { get; set; } = "Confirm Action";
+
+    /// <summary>Gets or sets the message body explaining what will happen.</summary>
+    [Parameter] public string Message { get; set; } = "Are you sure?";
+
+    /// <summary>Gets or sets the text for the confirm button. Default: "Confirm".</summary>
+    [Parameter] public string ConfirmText { get; set; } = "Confirm";
+
+    /// <summary>Gets or sets the Bootstrap class for the confirm button. Default: "btn-primary".</summary>
+    [Parameter] public string ConfirmClass { get; set; } = "btn-primary";
+
+    /// <summary>Gets or sets the text for the cancel button. Default: "Cancel".</summary>
+    [Parameter] public string CancelText { get; set; } = "Cancel";
+
+    /// <summary>Gets or sets the callback invoked when the user clicks Confirm.</summary>
+    [Parameter] public EventCallback OnConfirmed { get; set; }
+
+    /// <summary>Shows the dialog. Call this from the parent component to display the modal.</summary>
+    public void Show()
+    {
+        _isVisible = true;
+        _isProcessing = false;
+        StateHasChanged(); // Tell Blazor to re-render this component
+    }
+
+    /// <summary>Hides the dialog. Called on Cancel or after Confirm completes.</summary>
+    public void Hide()
+    {
+        _isVisible = false;
+        _isProcessing = false;
+        StateHasChanged();
+    }
+
+    // Internal: called when the user clicks the Confirm button
+    private async Task Confirm()
+    {
+        _isProcessing = true;
+        // Invoke the parent's callback — this runs the actual destructive action
+        await OnConfirmed.InvokeAsync();
+        _isProcessing = false;
+        _isVisible = false;
+    }
+
+    // Internal: called when the user clicks Cancel or the X button
+    private void Cancel()
+    {
+        _isVisible = false;
+    }
+}

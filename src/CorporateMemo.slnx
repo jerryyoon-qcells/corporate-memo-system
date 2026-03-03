@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="../tests/CorporateMemo.Application.Tests/CorporateMemo.Application.Tests.csproj" />
+  <Project Path="../tests/CorporateMemo.Domain.Tests/CorporateMemo.Domain.Tests.csproj" />
+  <Project Path="CorporateMemo.Application/CorporateMemo.Application.csproj" />
+  <Project Path="CorporateMemo.Domain/CorporateMemo.Domain.csproj" />
+  <Project Path="CorporateMemo.Infrastructure/CorporateMemo.Infrastructure.csproj" />
+  <Project Path="CorporateMemo.Web/CorporateMemo.Web.csproj" />
+</Solution>

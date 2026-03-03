@@ -1,0 +1,55 @@
+@*
+    NavMenu.razor — Sidebar navigation links.
+    Uses NavLink components which automatically add the "active" CSS class
+    when the current URL matches the href.
+*@
+@inject NavigationManager Nav
+
+<nav class="nav flex-column pt-2" aria-label="Page navigation">
+    <div class="px-3 pb-2">
+        <small class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0.05em;">
+            Main Menu
+        </small>
+    </div>
+
+    @* Dashboard — home page showing all documents *@
+    <NavLink class="nav-link d-flex align-items-center gap-2"
+             href="/"
+             Match="NavLinkMatch.All"
+             aria-label="Dashboard">
+        <i class="bi bi-grid-1x2-fill" aria-hidden="true"></i>
+        <span>Dashboard</span>
+    </NavLink>
+
+    @* Create a new memo *@
+    <NavLink class="nav-link d-flex align-items-center gap-2"
+             href="/memo/create"
+             aria-label="Create new memo">
+        <i class="bi bi-plus-circle-fill" aria-hidden="true"></i>
+        <span>New Memo</span>
+    </NavLink>
+
+    <hr class="mx-3 my-2" />
+
+    <div class="px-3 pb-2">
+        <small class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0.05em;">
+            My Work
+        </small>
+    </div>
+
+    @* My Documents tab shortcut *@
+    <NavLink class="nav-link d-flex align-items-center gap-2"
+             href="/?tab=mydocs"
+             aria-label="My Documents">
+        <i class="bi bi-file-earmark-person-fill" aria-hidden="true"></i>
+        <span>My Documents</span>
+    </NavLink>
+
+    @* My Approvals tab shortcut *@
+    <NavLink class="nav-link d-flex align-items-center gap-2"
+             href="/?tab=approvals"
+             aria-label="My Approvals">
+        <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+        <span>My Approvals</span>
+    </NavLink>
+</nav>

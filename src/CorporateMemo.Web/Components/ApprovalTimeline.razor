@@ -1,0 +1,83 @@
+@*
+    ApprovalTimeline.razor — Vertical timeline showing each approver's decision.
+    Displayed on the Memo Detail page in the approval history section.
+    Shows approver name, decision badge, timestamp, and any rejection comment.
+*@
+@using CorporateMemo.Application.DTOs
+@using CorporateMemo.Domain.Enums
+
+@if (Steps == null || !Steps.Any())
+{
+    <p class="text-muted fst-italic">No approvers assigned to this memo.</p>
+}
+else
+{
+    <div class="approval-timeline" role="list" aria-label="Approval history">
+        @foreach (var step in Steps.OrderBy(s => s.Order))
+        {
+            @* Determine the CSS class for the timeline dot color *@
+            var dotClass = step.Decision switch
+            {
+                ApprovalDecision.Approved => "timeline-dot-approved",
+                ApprovalDecision.Rejected => "timeline-dot-rejected",
+                _ => "timeline-dot-pending"
+            };
+
+            <div class="timeline-item" role="listitem">
+                @* Colored dot on the timeline vertical line *@
+                <span class="timeline-dot @dotClass" aria-hidden="true"></span>
+
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body py-2 px-3">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                            <div>
+                                @* Approver name and email *@
+                                <strong>@step.ApproverName</strong>
+                                <br />
+                                <small class="text-muted">@step.ApproverEmail</small>
+                            </div>
+                            @* Decision badge *@
+                            <div>
+                                @{
+                                    var badgeClass = step.Decision switch
+                                    {
+                                        ApprovalDecision.Approved => "bg-success",
+                                        ApprovalDecision.Rejected => "bg-danger",
+                                        _ => "bg-warning text-dark"
+                                    };
+                                }
+                                <span class="badge @badgeClass">@step.DecisionDisplay</span>
+                            </div>
+                        </div>
+
+                        @* Show decision timestamp if a decision was made *@
+                        @if (step.DecidedAt.HasValue)
+                        {
+                            <small class="text-muted d-block mt-1">
+                                <i class="bi bi-clock me-1" aria-hidden="true"></i>
+                                @step.DecidedAt.Value.ToString("MMM d, yyyy 'at' HH:mm") UTC
+                            </small>
+                        }
+
+                        @* Show rejection comment if provided *@
+                        @if (!string.IsNullOrEmpty(step.Comment))
+                        {
+                            <div class="mt-2 p-2 bg-light rounded">
+                                <small>
+                                    <i class="bi bi-chat-quote me-1" aria-hidden="true"></i>
+                                    <em>@step.Comment</em>
+                                </small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>Gets or sets the list of approval steps to display in the timeline.</summary>
+    [Parameter, EditorRequired]
+    public List<ApprovalStepDto>? Steps { get; set; }
+}

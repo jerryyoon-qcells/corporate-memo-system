@@ -1,0 +1,64 @@
+## .NET / C# .gitignore
+
+# Build output
+bin/
+obj/
+out/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# .NET runtime files
+*.runtimeconfig.json
+
+# EF Core migrations auto-generated
+# (keep migration files, exclude model cache)
+
+# Published output
+publish/
+PublishProfiles/
+
+# User secrets
+**/secrets.json
+**/appsettings.*.json
+!**/appsettings.Development.json
+
+# Logs
+*.log
+logs/
+
+# Uploaded attachments (runtime data, not source)
+**/attachments/
+**/wwwroot/uploads/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node (if any front-end tooling added)
+node_modules/
+
+# Test results
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# Claude agent memory (local only)
+agent-memory/

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Target .NET 8.0 as required by the project constitution -->
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Enable XML documentation generation for all public members -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MediatR: Mediator pattern for decoupling commands, queries, and handlers -->
+    <PackageReference Include="MediatR" Version="12.2.0" />
+    <!-- FluentValidation: Fluent API for defining validation rules in a readable way -->
+    <PackageReference Include="FluentValidation" Version="11.9.0" />
+    <!-- FluentValidation.DependencyInjectionExtensions: provides AddValidatorsFromAssembly for DI registration -->
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.9.0" />
+    <!-- AutoMapper: Convention-based object-to-object mapping between layers -->
+    <PackageReference Include="AutoMapper" Version="13.0.1" />
+    <!-- Microsoft.Extensions.DependencyInjection.Abstractions: for IServiceCollection in DI registration -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
+    <!-- Microsoft.Extensions.Logging.Abstractions: for ILogger interface -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference Domain project - Application depends on Domain, never the reverse -->
+    <ProjectReference Include="..\CorporateMemo.Domain\CorporateMemo.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

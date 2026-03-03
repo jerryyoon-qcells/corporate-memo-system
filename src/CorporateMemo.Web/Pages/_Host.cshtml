@@ -1,0 +1,63 @@
+@page "/"
+@namespace CorporateMemo.Web.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    // _Host.cshtml is the Razor Page that bootstraps the Blazor Server application.
+    // It serves as the HTML shell that the browser loads first.
+    // Blazor components are rendered inside the <component> tag below.
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Corporate Memo System</title>
+    <base href="~/" />
+
+    <!-- Bootstrap 5 CSS — provides the entire styling framework -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+          integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+          crossorigin="anonymous" />
+
+    <!-- Bootstrap Icons — icon library used throughout the UI -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+
+    <!-- Our custom CSS overrides -->
+    <link rel="stylesheet" href="css/app.css" />
+
+    <!-- Blazor Server requires this CSS for error UI -->
+    <link href="_content/Microsoft.AspNetCore.Components.Web/ErrorBoundary.razor.css" rel="stylesheet" />
+</head>
+<body>
+    <!--
+    This component tag renders the root Blazor component (App.razor).
+    render-mode="ServerPrerendered" means:
+    - The initial HTML is rendered on the server (good for SEO and fast first paint)
+    - Then Blazor takes over via SignalR for interactive behavior
+    -->
+    <component type="typeof(CorporateMemo.Web.App)" render-mode="ServerPrerendered" />
+
+    <!-- Bootstrap 5 JavaScript bundle (includes Popper.js for dropdowns/tooltips) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+            crossorigin="anonymous"></script>
+
+    <!-- Blazor Server script — this establishes the SignalR connection to the server -->
+    <script src="_framework/blazor.server.js"></script>
+
+    <!-- Small JS utility for showing Bootstrap toasts programmatically -->
+    <script>
+        // showToast: Helper called from Blazor via JS interop to display Bootstrap toasts
+        window.showToast = function (toastId) {
+            var toastEl = document.getElementById(toastId);
+            if (toastEl) {
+                var toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+                toast.show();
+            }
+        };
+    </script>
+</body>
+</html>

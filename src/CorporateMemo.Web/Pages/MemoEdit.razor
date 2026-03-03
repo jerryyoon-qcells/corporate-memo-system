@@ -1,0 +1,341 @@
+@*
+    MemoEdit.razor — Pre-populated memo edit form.
+    Only accessible for Draft or Rejected memos owned by the current user.
+    Same layout as MemoCreate but pre-filled with existing memo data.
+*@
+@page "/memo/edit/{MemoId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using CorporateMemo.Application.DTOs
+@using CorporateMemo.Application.Memos.Commands
+@using CorporateMemo.Application.Memos.Queries
+@using CorporateMemo.Application.Interfaces
+@using CorporateMemo.Domain.Enums
+@using Microsoft.AspNetCore.Components.Forms
+@using CorporateMemo.Domain.Entities
+@using Microsoft.AspNetCore.Identity
+@inject MediatR.IMediator Mediator
+@inject NavigationManager Nav
+@inject ICurrentUserService CurrentUser
+@inject ILogger<MemoEdit> Logger
+
+<PageTitle>Edit Memo — Corporate Memo System</PageTitle>
+
+@if (_isLoading)
+{
+    <div class="text-center py-5" aria-live="polite">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else if (_memo == null)
+{
+    <div class="alert alert-danger" role="alert">Memo not found or you do not have permission to edit it.</div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="/memo/@MemoId">@_memo.MemoNumber</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Edit</li>
+                </ol>
+            </nav>
+            <h1 class="fs-2 fw-bold text-dark mb-0">Edit Memo</h1>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>@_errorMessage
+        </div>
+    }
+
+    <div class="row g-4">
+        @* Left column *@
+        <div class="col-12 col-lg-7">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="edit-title" class="form-label fw-semibold">
+                            Title <span class="required-indicator" aria-hidden="true">*</span>
+                        </label>
+                        <input id="edit-title" type="text" class="form-control"
+                               maxlength="100" @bind="_title" @bind:event="oninput"
+                               placeholder="Memo title..." aria-required="true" />
+                        <small class="text-muted">@_title.Length / 100</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="edit-content" class="form-label fw-semibold">
+                            Content <span class="required-indicator" aria-hidden="true">*</span>
+                        </label>
+                        <textarea id="edit-content" class="form-control" rows="12"
+                                  @bind="_content" @bind:event="oninput"
+                                  placeholder="Memo content..." aria-required="true"
+                                  style="font-size: 0.95rem; line-height: 1.6;"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h2 class="fs-5 fw-semibold mb-3">
+                        <i class="bi bi-paperclip me-2" aria-hidden="true"></i>Attachments
+                    </h2>
+                    <AttachmentUpload Attachments="_attachments"
+                                      OnFileSelected="HandleFileSelected"
+                                      OnAttachmentRemoved="HandleAttachmentRemoved" />
+                </div>
+            </div>
+        </div>
+
+        @* Right column *@
+        <div class="col-12 col-lg-5">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-muted small text-uppercase">Memo Number</label>
+                        <div class="form-control-plaintext memo-number">@_memo.MemoNumber</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-muted small text-uppercase">Author</label>
+                        <div class="form-control-plaintext">
+                            <strong>@_memo.AuthorName</strong><br />
+                            <small class="text-muted">@_memo.AuthorEmail</small>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            <i class="bi bi-hash me-1" aria-hidden="true"></i>Tags
+                        </label>
+                        <TagInput Tags="_tags" TagsChanged="tags => _tags = tags" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-to" class="form-label fw-semibold">
+                            To (Recipients) <span class="required-indicator" aria-hidden="true">*</span>
+                        </label>
+                        <input id="edit-to" type="text" class="form-control"
+                               placeholder="Enter email, press Enter to add..."
+                               @onkeydown="@(async e => { if (e.Key == "Enter") await AddToRecipient(); })"
+                               @bind="_toInput" @bind:event="oninput" />
+                        <div class="d-flex flex-wrap gap-1 mt-1">
+                            @foreach (var r in _toRecipients)
+                            {
+                                var recipient = r;
+                                <span class="badge bg-primary">@recipient
+                                    <button type="button" class="btn-close btn-close-white ms-1" style="font-size: 0.5rem;"
+                                            @onclick="() => _toRecipients.Remove(recipient)" aria-label="Remove @recipient"></button>
+                                </span>
+                            }
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-cc" class="form-label fw-semibold">CC (Optional)</label>
+                        <input id="edit-cc" type="text" class="form-control"
+                               placeholder="Enter email, press Enter to add..."
+                               @onkeydown="@(async e => { if (e.Key == "Enter") await AddCcRecipient(); })"
+                               @bind="_ccInput" @bind:event="oninput" />
+                        <div class="d-flex flex-wrap gap-1 mt-1">
+                            @foreach (var r in _ccRecipients)
+                            {
+                                var recipient = r;
+                                <span class="badge bg-secondary">@recipient
+                                    <button type="button" class="btn-close btn-close-white ms-1" style="font-size: 0.5rem;"
+                                            @onclick="() => _ccRecipients.Remove(recipient)" aria-label="Remove @recipient"></button>
+                                </span>
+                            }
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            <i class="bi bi-person-check me-1" aria-hidden="true"></i>Approvers
+                        </label>
+                        <ApproverList Approvers="_approvers" ApproversChanged="approvers => _approvers = approvers" />
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="edit-confidential"
+                                   @bind="_isConfidential" role="switch" />
+                            <label class="form-check-label fw-semibold" for="edit-confidential">
+                                <i class="bi bi-lock me-1" aria-hidden="true"></i>Confidential
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-secondary" @onclick="SaveAsDraft" disabled="@_isSubmitting">
+                            @if (_isSubmitting && _action == "draft") { <span class="spinner-border spinner-border-sm me-2"></span> }
+                            <i class="bi bi-save me-2" aria-hidden="true"></i>Save Draft
+                        </button>
+                        <button class="btn btn-primary" @onclick="SubmitMemo" disabled="@_isSubmitting">
+                            @if (_isSubmitting && _action == "submit") { <span class="spinner-border spinner-border-sm me-2"></span> }
+                            <i class="bi bi-send me-2" aria-hidden="true"></i>
+                            @(_approvers.Any() ? "Submit for Approval" : "Submit & Publish")
+                        </button>
+                        <a href="/memo/@MemoId" class="btn btn-link text-muted text-decoration-none">Cancel</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid MemoId { get; set; }
+
+    private MemoDto? _memo;
+    private bool _isLoading = true;
+    private bool _isSubmitting;
+    private string _action = string.Empty;
+    private string? _errorMessage;
+
+    private string _title = string.Empty;
+    private string _content = string.Empty;
+    private List<string> _tags = new();
+    private List<string> _toRecipients = new();
+    private List<string> _ccRecipients = new();
+    private List<ApproverInfo> _approvers = new();
+    private List<AttachmentDto> _attachments = new();
+    private bool _isConfidential;
+    private string _toInput = string.Empty;
+    private string _ccInput = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _memo = await Mediator.Send(new GetMemoByIdQuery { MemoId = MemoId });
+
+            // Verify the current user is the author
+            if (_memo.AuthorId != CurrentUser.UserId && !CurrentUser.IsAdmin)
+            {
+                _memo = null;
+                _errorMessage = "You do not have permission to edit this memo.";
+                return;
+            }
+
+            // Verify the memo is in an editable state
+            if (_memo.Status != MemoStatus.Draft && _memo.Status != MemoStatus.Rejected)
+            {
+                _errorMessage = $"Memos in '{_memo.Status}' status cannot be edited.";
+                _memo = null;
+                return;
+            }
+
+            // Pre-populate form fields from the existing memo
+            _title = _memo.Title;
+            _content = _memo.Content;
+            _tags = new List<string>(_memo.Tags);
+            _toRecipients = new List<string>(_memo.ToRecipients);
+            _ccRecipients = new List<string>(_memo.CcRecipients);
+            _attachments = new List<AttachmentDto>(_memo.Attachments);
+            _isConfidential = _memo.IsConfidential;
+            _approvers = _memo.ApprovalSteps.Select(s => new ApproverInfo
+            {
+                UserId = s.ApproverId,
+                DisplayName = s.ApproverName,
+                Email = s.ApproverEmail
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to load memo for editing.";
+            Logger.LogError(ex, "Error loading memo {MemoId} for edit", MemoId);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task AddToRecipient()
+    {
+        if (!string.IsNullOrWhiteSpace(_toInput) && !_toRecipients.Contains(_toInput.Trim()))
+            _toRecipients.Add(_toInput.Trim());
+        _toInput = string.Empty;
+    }
+
+    private async Task AddCcRecipient()
+    {
+        if (!string.IsNullOrWhiteSpace(_ccInput) && !_ccRecipients.Contains(_ccInput.Trim()))
+            _ccRecipients.Add(_ccInput.Trim());
+        _ccInput = string.Empty;
+    }
+
+    private UpdateMemoCommand BuildUpdateCommand() => new()
+    {
+        MemoId = MemoId,
+        Title = _title.Trim(),
+        Content = _content,
+        Tags = _tags,
+        ToRecipients = _toRecipients,
+        CcRecipients = _ccRecipients,
+        Approvers = _approvers,
+        IsConfidential = _isConfidential
+    };
+
+    private async Task SaveAsDraft()
+    {
+        _isSubmitting = true;
+        _action = "draft";
+        _errorMessage = null;
+        try
+        {
+            await Mediator.Send(BuildUpdateCommand());
+            Nav.NavigateTo($"/memo/{MemoId}");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to save: " + ex.Message;
+        }
+        finally { _isSubmitting = false; }
+    }
+
+    private async Task SubmitMemo()
+    {
+        if (!_toRecipients.Any()) { _errorMessage = "At least one To recipient is required."; return; }
+        _isSubmitting = true;
+        _action = "submit";
+        _errorMessage = null;
+        try
+        {
+            await Mediator.Send(BuildUpdateCommand());
+            await Mediator.Send(new SubmitMemoCommand { MemoId = MemoId, BaseUrl = Nav.BaseUri.TrimEnd('/') });
+            Nav.NavigateTo($"/memo/{MemoId}");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to submit: " + ex.Message;
+        }
+        finally { _isSubmitting = false; }
+    }
+
+    private async Task HandleFileSelected(Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
+    {
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            var attachment = await Mediator.Send(new UploadAttachmentCommand
+            {
+                MemoId = MemoId, FileName = file.Name, ContentType = file.ContentType,
+                FileStream = stream, FileSizeBytes = file.Size
+            });
+            _attachments.Add(attachment);
+        }
+        catch (Exception ex) { _errorMessage = $"Failed to upload '{file.Name}': {ex.Message}"; }
+    }
+
+    private async Task HandleAttachmentRemoved(Guid attachmentId)
+    {
+        await Mediator.Send(new DeleteAttachmentCommand { MemoId = MemoId, AttachmentId = attachmentId });
+        _attachments.RemoveAll(a => a.Id == attachmentId);
+    }
+}

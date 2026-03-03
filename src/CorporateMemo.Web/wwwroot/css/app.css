@@ -1,0 +1,372 @@
+/*
+ * app.css — Custom CSS overrides for the Corporate Memo System
+ * Built on top of Bootstrap 5. Only add styles here that Bootstrap doesn't cover.
+ *
+ * Structure:
+ * 1. Layout (sidebar, navbar, main content)
+ * 2. Status badges
+ * 3. Dashboard table styles
+ * 4. Timeline (approval history)
+ * 5. Attachment zone (drag-and-drop file upload)
+ * 6. Tag/chip input
+ * 7. Notification panel
+ */
+
+/* =============================================================================
+   1. LAYOUT — Sidebar and Main Content Area
+   ============================================================================= */
+
+/* The outer wrapper for the sidebar + content layout */
+.layout-wrapper {
+    display: flex;
+    min-height: calc(100vh - 56px); /* Fill screen below the navbar */
+}
+
+/* Sidebar navigation panel */
+.sidebar {
+    width: 240px;
+    min-height: 100%;
+    background-color: #f8f9fa; /* Bootstrap bg-light */
+    border-right: 1px solid #dee2e6;
+    padding: 1rem 0;
+    flex-shrink: 0; /* Don't let the sidebar shrink */
+    transition: width 0.3s ease; /* Smooth collapse animation */
+}
+
+/* The main content area next to the sidebar */
+.main-content {
+    flex: 1; /* Take all remaining width */
+    padding: 1.5rem;
+    overflow-x: auto; /* Allow horizontal scroll on small screens */
+    background-color: #ffffff;
+}
+
+/* Sidebar navigation links */
+.sidebar .nav-link {
+    color: #495057;
+    padding: 0.6rem 1.25rem;
+    border-radius: 0.375rem;
+    margin: 0.1rem 0.5rem;
+    font-size: 0.9rem;
+}
+
+.sidebar .nav-link:hover {
+    background-color: #e9ecef;
+    color: #0d6efd;
+}
+
+.sidebar .nav-link.active {
+    background-color: #0d6efd;
+    color: white;
+}
+
+.sidebar .nav-link i {
+    width: 1.25rem; /* Fixed icon width for alignment */
+    text-align: center;
+}
+
+/* Top navbar */
+.top-navbar {
+    background-color: #212529 !important; /* Bootstrap dark */
+    height: 56px;
+}
+
+/* =============================================================================
+   2. STATUS BADGES
+   ============================================================================= */
+
+/* Base badge style — override Bootstrap's default for memo-specific badges */
+.memo-status-badge {
+    font-size: 0.8rem;
+    padding: 0.3em 0.6em;
+    border-radius: 0.375rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Draft — Gray (Bootstrap secondary) */
+.badge-draft {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* Pending Approval — Yellow (Bootstrap warning), dark text for contrast */
+.badge-pending {
+    background-color: #ffc107;
+    color: #212529; /* Dark text for readability on yellow */
+}
+
+/* Approved — Green (Bootstrap success) */
+.badge-approved {
+    background-color: #198754;
+    color: white;
+}
+
+/* Rejected — Red (Bootstrap danger) */
+.badge-rejected {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Published — Cyan-Blue (Bootstrap info) */
+.badge-published {
+    background-color: #0dcaf0;
+    color: #212529; /* Dark text for readability on light cyan */
+}
+
+/* =============================================================================
+   3. DASHBOARD TABLE STYLES
+   ============================================================================= */
+
+/* Clickable sort headers */
+.sortable-header {
+    cursor: pointer;
+    user-select: none; /* Prevent text selection on double-click */
+}
+
+.sortable-header:hover {
+    background-color: #f8f9fa;
+}
+
+/* Sort direction indicator arrow */
+.sort-icon {
+    font-size: 0.75rem;
+    margin-left: 0.25rem;
+    color: #6c757d;
+}
+
+/* Memo title link in the table */
+.memo-title-link {
+    font-weight: 500;
+    text-decoration: none;
+    color: #0d6efd;
+}
+
+.memo-title-link:hover {
+    text-decoration: underline;
+}
+
+/* Monospace font for memo numbers (e.g., "jsmith-20260302-001") */
+.memo-number {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+/* =============================================================================
+   4. APPROVAL TIMELINE
+   ============================================================================= */
+
+/* Container for the vertical timeline */
+.approval-timeline {
+    position: relative;
+    padding-left: 2rem;
+}
+
+/* Vertical line running through the timeline */
+.approval-timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.75rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: #dee2e6;
+}
+
+/* Each timeline item */
+.timeline-item {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+
+/* The dot on the timeline line */
+.timeline-dot {
+    position: absolute;
+    left: -1.625rem; /* Align with the vertical line */
+    top: 0.25rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.timeline-dot-pending  { background-color: #ffc107; }
+.timeline-dot-approved { background-color: #198754; }
+.timeline-dot-rejected { background-color: #dc3545; }
+
+/* =============================================================================
+   5. ATTACHMENT UPLOAD ZONE
+   ============================================================================= */
+
+/* Drag-and-drop file upload area */
+.attachment-zone {
+    border: 2px dashed #dee2e6;
+    border-radius: 0.5rem;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s;
+    color: #6c757d;
+}
+
+/* Visual feedback when the user drags a file over the drop zone */
+.attachment-zone.drag-over {
+    border-color: #0d6efd;
+    background-color: #e8f0fe;
+    color: #0d6efd;
+}
+
+.attachment-zone:hover {
+    border-color: #adb5bd;
+    background-color: #f8f9fa;
+}
+
+/* Uploaded file item in the attachment list */
+.attachment-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    margin-top: 0.5rem;
+    background-color: #f8f9fa;
+}
+
+.attachment-icon {
+    font-size: 1.5rem;
+    margin-right: 0.75rem;
+    color: #6c757d;
+}
+
+.attachment-name {
+    flex: 1;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.attachment-size {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-left: 0.5rem;
+}
+
+/* =============================================================================
+   6. TAG/CHIP INPUT
+   ============================================================================= */
+
+/* Container that looks like an input field but holds chips */
+.tag-input-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    min-height: 2.5rem;
+    cursor: text;
+    background-color: white;
+}
+
+.tag-input-container:focus-within {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* Individual tag chip */
+.tag-chip {
+    display: inline-flex;
+    align-items: center;
+    background-color: #0d6efd;
+    color: white;
+    border-radius: 1rem;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.8rem;
+    gap: 0.25rem;
+}
+
+/* The × button to remove a tag */
+.tag-chip-remove {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.75rem;
+    line-height: 1;
+    opacity: 0.7;
+}
+
+.tag-chip-remove:hover {
+    opacity: 1;
+}
+
+/* The actual text input inside the tag container */
+.tag-input-field {
+    border: none;
+    outline: none;
+    flex: 1;
+    min-width: 80px;
+    font-size: 0.9rem;
+    padding: 0.1rem 0;
+    background: transparent;
+}
+
+/* =============================================================================
+   7. NOTIFICATION PANEL
+   ============================================================================= */
+
+/* Notification bell badge (unread count) */
+.notification-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    font-size: 0.65rem;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0.15rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Individual notification item */
+.notification-item {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #dee2e6;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.notification-item:hover {
+    background-color: #f8f9fa;
+}
+
+.notification-item.unread {
+    background-color: #e8f0fe; /* Light blue tint for unread notifications */
+    border-left: 3px solid #0d6efd;
+}
+
+.notification-time {
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+/* =============================================================================
+   8. FORMS
+   ============================================================================= */
+
+/* Memo content area — constrain reading width for readability */
+.memo-content-area {
+    max-width: 80ch; /* ~80 characters wide for comfortable reading */
+    line-height: 1.6;
+}
+
+/* Required field indicator */
+.required-indicator {
+    color: #dc3545;
+    margin-left: 0.2rem;
+}

@@ -1,0 +1,27 @@
+@*
+    RedirectToLogin.razor — A utility component that redirects unauthenticated users to the login page.
+    Used in App.razor when a page marked with [Authorize] is accessed without authentication.
+*@
+@inject NavigationManager NavigationManager
+
+@code {
+    /// <summary>
+    /// On initialization, redirects to the login page.
+    /// The current URL is passed as a returnUrl parameter so the user is returned
+    /// to the requested page after successful login.
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        // Get the current URL so we can redirect back after login
+        var currentUrl = NavigationManager.Uri;
+
+        // Build the login URL with a returnUrl parameter
+        // This tells the login page where to redirect after successful login
+        var loginUrl = $"/login?returnUrl={Uri.EscapeDataString(currentUrl)}";
+
+        // Force a page navigation to the login URL
+        // forceLoad: true ensures a full page reload (not a Blazor navigation)
+        // which is needed for the server-side Identity login to work correctly
+        NavigationManager.NavigateTo(loginUrl, forceLoad: true);
+    }
+}

@@ -1,0 +1,51 @@
+@*
+    App.razor — The root Blazor component.
+    This is the entry point for all Blazor rendering.
+    It sets up the Router which matches URLs to Page components,
+    and wraps everything in CascadingAuthenticationState so that
+    all child components can access the current user's authentication state.
+*@
+
+@* CascadingAuthenticationState makes authentication state available
+   to all child components via [CascadingParameter] AuthenticationState *@
+<CascadingAuthenticationState>
+    @* Router matches the current URL to a Page component *@
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            @* AuthorizeRouteView handles [Authorize] attribute on pages *@
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Components.MainLayout)">
+                <NotAuthorized>
+                    @* Redirect to login if the page requires authentication *@
+                    @if (!context.User.Identity?.IsAuthenticated ?? true)
+                    {
+                        <RedirectToLogin />
+                    }
+                    else
+                    {
+                        <h1>Access Denied</h1>
+                        <p>You do not have permission to view this page.</p>
+                    }
+                </NotAuthorized>
+                <Authorizing>
+                    @* Show a spinner while checking authentication *@
+                    <div class="d-flex justify-content-center align-items-center" style="height: 200px;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Checking authentication...</span>
+                        </div>
+                    </div>
+                </Authorizing>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <PageTitle>Page Not Found</PageTitle>
+            <LayoutView Layout="@typeof(Components.MainLayout)">
+                <div class="container mt-5 text-center">
+                    <h1 class="display-4">404 — Page Not Found</h1>
+                    <p class="lead">The page you are looking for does not exist.</p>
+                    <a href="/" class="btn btn-primary">Go to Dashboard</a>
+                </div>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>

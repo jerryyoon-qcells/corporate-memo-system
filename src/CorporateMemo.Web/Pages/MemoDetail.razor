@@ -1,0 +1,453 @@
+@*
+    MemoDetail.razor — Read-only view of a single memo.
+    Shows all memo metadata, content, attachments, and approval history timeline.
+    Context-sensitive action buttons based on the memo's status and current user's role.
+*@
+@page "/memo/{MemoId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using CorporateMemo.Application.DTOs
+@using CorporateMemo.Application.Memos.Commands
+@using CorporateMemo.Application.Memos.Queries
+@using CorporateMemo.Domain.Enums
+@using CorporateMemo.Application.Interfaces
+@inject MediatR.IMediator Mediator
+@inject NavigationManager Nav
+@inject ICurrentUserService CurrentUser
+@inject IAttachmentStorage AttachmentStorage
+@inject ILogger<MemoDetail> Logger
+
+<PageTitle>@(_memo?.Title ?? "Memo") — Corporate Memo System</PageTitle>
+
+@if (_isLoading)
+{
+    <div class="text-center py-5" aria-live="polite">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading memo...</span>
+        </div>
+    </div>
+}
+else if (_notFound)
+{
+    <div class="text-center py-5">
+        <h1 class="fs-2">Memo Not Found</h1>
+        <p class="text-muted">The memo you are looking for does not exist or has been deleted.</p>
+        <a href="/" class="btn btn-primary">Go to Dashboard</a>
+    </div>
+}
+else if (_memo != null)
+{
+    @* Breadcrumb *@
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+            <li class="breadcrumb-item active" aria-current="page">@_memo.MemoNumber</li>
+        </ol>
+    </nav>
+
+    @* Success/Error messages *@
+    @if (!string.IsNullOrEmpty(_successMessage))
+    {
+        <div class="alert alert-success alert-dismissible" role="alert">
+            <i class="bi bi-check-circle me-2" aria-hidden="true"></i>@_successMessage
+            <button type="button" class="btn-close" @onclick="() => _successMessage = null" aria-label="Close"></button>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible" role="alert">
+            <i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>@_errorMessage
+            <button type="button" class="btn-close" @onclick="() => _errorMessage = null" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="row g-4">
+        @* ============================
+           MAIN CONTENT COLUMN
+           ============================ *@
+        <div class="col-12 col-lg-8">
+            @* Memo header card *@
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body">
+                    @* Title and status *@
+                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2 flex-wrap">
+                        <h1 class="fs-3 fw-bold mb-0">@_memo.Title</h1>
+                        <div class="d-flex gap-2 align-items-center flex-shrink-0">
+                            <StatusBadge Status="@_memo.Status" />
+                            @if (_memo.IsConfidential)
+                            {
+                                <span class="badge bg-warning text-dark">
+                                    <i class="bi bi-lock-fill me-1" aria-hidden="true"></i>Confidential
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    @* Memo metadata strip *@
+                    <div class="d-flex flex-wrap gap-3 text-muted small border-top border-bottom py-2 my-3">
+                        <span title="Memo Number">
+                            <i class="bi bi-hash me-1" aria-hidden="true"></i>
+                            <span class="memo-number">@_memo.MemoNumber</span>
+                        </span>
+                        <span title="Author">
+                            <i class="bi bi-person me-1" aria-hidden="true"></i>
+                            @_memo.AuthorName
+                        </span>
+                        <span title="Date Created">
+                            <i class="bi bi-calendar me-1" aria-hidden="true"></i>
+                            @_memo.DateCreated.ToString("MMM d, yyyy")
+                        </span>
+                        @if (_memo.ApprovedDate.HasValue)
+                        {
+                            <span title="Approved Date">
+                                <i class="bi bi-check2-circle me-1 text-success" aria-hidden="true"></i>
+                                Approved: @_memo.ApprovedDate.Value.ToString("MMM d, yyyy")
+                            </span>
+                        }
+                    </div>
+
+                    @* Tags *@
+                    @if (_memo.Tags.Any())
+                    {
+                        <div class="mb-3">
+                            @foreach (var tag in _memo.Tags)
+                            {
+                                <span class="badge bg-secondary me-1 mb-1">#@tag</span>
+                            }
+                        </div>
+                    }
+
+                    @* Content *@
+                    <div class="memo-content-area">
+                        @* Use @((MarkupString)...) for HTML content — sanitise first in production! *@
+                        <div style="white-space: pre-wrap; word-wrap: break-word;">@_memo.Content</div>
+                    </div>
+                </div>
+            </div>
+
+            @* Attachments *@
+            @if (_memo.Attachments.Any())
+            {
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-body">
+                        <h2 class="fs-5 fw-semibold mb-3">
+                            <i class="bi bi-paperclip me-2" aria-hidden="true"></i>
+                            Attachments (@_memo.Attachments.Count)
+                        </h2>
+                        <ul class="list-unstyled" role="list">
+                            @foreach (var att in _memo.Attachments)
+                            {
+                                <li class="attachment-item mb-2">
+                                    <i class="bi bi-file-earmark attachment-icon" aria-hidden="true"></i>
+                                    <span class="attachment-name">@att.FileName</span>
+                                    <span class="attachment-size">@att.FileSizeDisplay</span>
+                                    <a href="/api/attachments/@att.Id"
+                                       class="btn btn-sm btn-outline-secondary ms-2"
+                                       download="@att.FileName"
+                                       aria-label="Download @att.FileName">
+                                        <i class="bi bi-download" aria-hidden="true"></i>
+                                    </a>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            }
+
+            @* Approval history timeline *@
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h2 class="fs-5 fw-semibold mb-3">
+                        <i class="bi bi-clock-history me-2" aria-hidden="true"></i>Approval History
+                    </h2>
+                    <ApprovalTimeline Steps="@_memo.ApprovalSteps" />
+                </div>
+            </div>
+        </div>
+
+        @* ============================
+           RIGHT COLUMN — Meta & Actions
+           ============================ *@
+        <div class="col-12 col-lg-4">
+            @* Distribution list *@
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body">
+                    <h2 class="fs-6 fw-semibold mb-2">
+                        <i class="bi bi-envelope me-2" aria-hidden="true"></i>To
+                    </h2>
+                    @if (_memo.ToRecipients.Any())
+                    {
+                        <ul class="list-unstyled mb-0 small">
+                            @foreach (var r in _memo.ToRecipients)
+                            {
+                                <li class="py-1">@r</li>
+                            }
+                        </ul>
+                    }
+
+                    @if (_memo.CcRecipients.Any())
+                    {
+                        <h2 class="fs-6 fw-semibold mt-3 mb-2">CC</h2>
+                        <ul class="list-unstyled mb-0 small">
+                            @foreach (var r in _memo.CcRecipients)
+                            {
+                                <li class="py-1">@r</li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+
+            @* Context-sensitive action buttons *@
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h2 class="fs-6 fw-semibold mb-3">Actions</h2>
+                    <div class="d-grid gap-2">
+                        @* Edit — only for Draft/Rejected memos by the author *@
+                        @if (IsAuthor && (_memo.Status == MemoStatus.Draft || _memo.Status == MemoStatus.Rejected))
+                        {
+                            <a href="/memo/edit/@_memo.Id" class="btn btn-outline-primary">
+                                <i class="bi bi-pencil me-2" aria-hidden="true"></i>Edit Memo
+                            </a>
+                        }
+
+                        @* Submit — only for Draft memos by the author *@
+                        @if (IsAuthor && _memo.Status == MemoStatus.Draft)
+                        {
+                            <button class="btn btn-primary" @onclick="SubmitMemo" disabled="@_isActing">
+                                @if (_isActing && _actingAction == "submit")
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                                }
+                                <i class="bi bi-send me-2" aria-hidden="true"></i>Submit
+                            </button>
+                        }
+
+                        @* Approve — only for assigned approvers on PendingApproval memos *@
+                        @if (IsApprover && _memo.Status == MemoStatus.PendingApproval && !HasAlreadyDecided)
+                        {
+                            <button class="btn btn-success" @onclick="() => ShowApproveDialog(true)">
+                                <i class="bi bi-check-circle me-2" aria-hidden="true"></i>Approve
+                            </button>
+                            <button class="btn btn-danger" @onclick="() => ShowApproveDialog(false)">
+                                <i class="bi bi-x-circle me-2" aria-hidden="true"></i>Reject
+                            </button>
+                        }
+
+                        @* Delete — only for Draft memos by the author *@
+                        @if (IsAuthor && _memo.Status == MemoStatus.Draft)
+                        {
+                            <button class="btn btn-outline-danger" @onclick="() => _deleteDialog!.Show()">
+                                <i class="bi bi-trash me-2" aria-hidden="true"></i>Delete
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Approve/Reject comment dialog *@
+    @if (_showDecisionDialog)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" role="dialog" aria-modal="true" aria-labelledby="decisionDialogTitle">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="decisionDialogTitle">
+                            @(_isApproving ? "Approve Memo" : "Reject Memo")
+                        </h5>
+                        <button type="button" class="btn-close" @onclick="() => _showDecisionDialog = false" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+                            @if (_isApproving)
+                            {
+                                <span>You are approving memo <strong>@_memo.MemoNumber</strong>.</span>
+                            }
+                            else
+                            {
+                                <span>You are rejecting memo <strong>@_memo.MemoNumber</strong>. The author will be notified.</span>
+                            }
+                        </p>
+                        <div class="mb-3">
+                            <label for="decision-comment" class="form-label">
+                                Comment @(_isApproving ? "(Optional)" : "(Required for rejection)")
+                            </label>
+                            <textarea id="decision-comment"
+                                      class="form-control"
+                                      rows="3"
+                                      @bind="_decisionComment"
+                                      placeholder="@(_isApproving ? "Add an optional note..." : "Please explain why you are rejecting this memo...")"
+                                      maxlength="500"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="() => _showDecisionDialog = false">Cancel</button>
+                        <button type="button"
+                                class="@(_isApproving ? "btn btn-success" : "btn btn-danger")"
+                                @onclick="SubmitDecision"
+                                disabled="@(_isActing)">
+                            @if (_isActing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                            }
+                            @(_isApproving ? "Approve" : "Reject")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Delete confirmation dialog *@
+    <ConfirmDialog @ref="_deleteDialog"
+                   Title="Delete Memo"
+                   Message="@($"Are you sure you want to permanently delete memo '{_memo?.MemoNumber}'? This action cannot be undone.")"
+                   ConfirmText="Delete"
+                   ConfirmClass="btn-danger"
+                   OnConfirmed="DeleteMemo" />
+}
+
+@code {
+    /// <summary>Gets or sets the memo ID from the URL route parameter.</summary>
+    [Parameter] public Guid MemoId { get; set; }
+
+    private MemoDto? _memo;
+    private bool _isLoading = true;
+    private bool _notFound;
+    private string? _successMessage;
+    private string? _errorMessage;
+    private bool _isActing;
+    private string _actingAction = string.Empty;
+
+    // Approval decision dialog state
+    private bool _showDecisionDialog;
+    private bool _isApproving;
+    private string _decisionComment = string.Empty;
+
+    // Delete dialog reference
+    private ConfirmDialog? _deleteDialog;
+
+    private bool IsAuthor => _memo?.AuthorId == CurrentUser.UserId;
+    private bool IsApprover => _memo?.ApprovalSteps.Any(s => s.ApproverId == CurrentUser.UserId) ?? false;
+    private bool HasAlreadyDecided => _memo?.ApprovalSteps
+        .Any(s => s.ApproverId == CurrentUser.UserId && s.Decision != Domain.Enums.ApprovalDecision.Pending) ?? false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMemo();
+    }
+
+    private async Task LoadMemo()
+    {
+        _isLoading = true;
+
+        try
+        {
+            _memo = await Mediator.Send(new GetMemoByIdQuery { MemoId = MemoId });
+        }
+        catch (Domain.Exceptions.MemoNotFoundException)
+        {
+            _notFound = true;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "An error occurred while loading the memo.";
+            Logger.LogError(ex, "Error loading memo {MemoId}", MemoId);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SubmitMemo()
+    {
+        _isActing = true;
+        _actingAction = "submit";
+        _errorMessage = null;
+
+        try
+        {
+            var command = new SubmitMemoCommand
+            {
+                MemoId = MemoId,
+                BaseUrl = Nav.BaseUri.TrimEnd('/')
+            };
+            _memo = await Mediator.Send(command);
+            _successMessage = _memo.Status == MemoStatus.Published
+                ? "Memo published successfully!"
+                : "Memo submitted for approval.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to submit memo: " + ex.Message;
+        }
+        finally
+        {
+            _isActing = false;
+        }
+    }
+
+    private void ShowApproveDialog(bool approve)
+    {
+        _isApproving = approve;
+        _decisionComment = string.Empty;
+        _showDecisionDialog = true;
+    }
+
+    private async Task SubmitDecision()
+    {
+        _isActing = true;
+        _errorMessage = null;
+
+        try
+        {
+            if (_isApproving)
+            {
+                var command = new ApproveMemoCommand
+                {
+                    MemoId = MemoId,
+                    Comment = _decisionComment,
+                    BaseUrl = Nav.BaseUri.TrimEnd('/')
+                };
+                _memo = await Mediator.Send(command);
+                _successMessage = "Memo approved successfully.";
+            }
+            else
+            {
+                var command = new RejectMemoCommand
+                {
+                    MemoId = MemoId,
+                    Comment = _decisionComment,
+                    BaseUrl = Nav.BaseUri.TrimEnd('/')
+                };
+                _memo = await Mediator.Send(command);
+                _successMessage = "Memo rejected.";
+            }
+
+            _showDecisionDialog = false;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to record decision: " + ex.Message;
+        }
+        finally
+        {
+            _isActing = false;
+        }
+    }
+
+    private async Task DeleteMemo()
+    {
+        try
+        {
+            await Mediator.Send(new DeleteMemoCommand { MemoId = MemoId });
+            Nav.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to delete memo: " + ex.Message;
+        }
+    }
+}

@@ -1,0 +1,94 @@
+@*
+    MainLayout.razor — The main shell layout for all authenticated pages.
+    Provides the top navbar, left sidebar, and main content area.
+    All pages that use @layout MainLayout (or inherit it via App.razor default) will render inside this.
+
+    IMPORTANT: OnInitializedAsync must call CurrentUserService.Initialize() so that
+    BlazorCurrentUserService captures the AuthenticationState for the duration of this
+    SignalR circuit. Without this, ICurrentUserService properties return null for all
+    interactive operations (button clicks, form submits) because HttpContext is not
+    available after the initial page-load HTTP request.
+*@
+@inherits LayoutComponentBase
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject CorporateMemo.Application.Interfaces.ICurrentUserService CurrentUserService
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        // Capture the authentication state once for this Blazor circuit.
+        // BlazorCurrentUserService stores the ClaimsPrincipal so that all command
+        // handlers can read the user identity reliably over the SignalR lifetime.
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        if (CurrentUserService is CorporateMemo.Web.Services.BlazorCurrentUserService blazorService)
+        {
+            blazorService.Initialize(authState);
+        }
+    }
+}
+
+<div class="d-flex flex-column" style="min-height: 100vh;">
+    @* ============================
+       TOP NAVIGATION BAR
+       ============================ *@
+    <nav class="navbar navbar-dark top-navbar px-3 sticky-top" aria-label="Main navigation">
+        <div class="d-flex align-items-center gap-3">
+            @* Application brand / logo *@
+            <a class="navbar-brand fw-bold" href="/">
+                <i class="bi bi-file-earmark-text-fill me-2" aria-hidden="true"></i>
+                Corporate Memo System
+            </a>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 ms-auto">
+            @* Notification bell — shows unread count *@
+            <NotificationBell />
+
+            @* User info and logout *@
+            <AuthorizeView>
+                <Authorized>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-light btn-sm dropdown-toggle"
+                                type="button"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false"
+                                aria-label="User menu">
+                            <i class="bi bi-person-circle me-1" aria-hidden="true"></i>
+                            @context.User.Identity?.Name
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                @* Logout uses a POST form to prevent CSRF *@
+                                <form method="post" action="/logout">
+                                    <button type="submit" class="dropdown-item text-danger">
+                                        <i class="bi bi-box-arrow-right me-2" aria-hidden="true"></i>Sign Out
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
+                </Authorized>
+                <NotAuthorized>
+                    <a class="btn btn-outline-light btn-sm" href="/login">Sign In</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+    </nav>
+
+    @* ============================
+       SIDEBAR + CONTENT AREA
+       ============================ *@
+    <div class="layout-wrapper">
+        @* Left sidebar navigation *@
+        <aside class="sidebar d-none d-lg-block" aria-label="Sidebar navigation">
+            <NavMenu />
+        </aside>
+
+        @* Main content area — renders the current page *@
+        <main class="main-content" id="main-content" tabindex="-1">
+            @* Body renders the active page component here *@
+            @Body
+        </main>
+    </div>
+</div>

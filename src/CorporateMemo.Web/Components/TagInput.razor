@@ -1,0 +1,111 @@
+@*
+    TagInput.razor — A chip-style tag input component.
+    Users type a tag name and press Enter (or comma) to add it.
+    Each added tag is shown as a colored chip with an × button to remove it.
+
+    Usage:
+    <TagInput Tags="@_memo.Tags" TagsChanged="tags => _memo.Tags = tags" />
+*@
+
+<div class="tag-input-container"
+     @onclick="FocusInput"
+     role="group"
+     aria-label="Tag input — press Enter or comma to add a tag">
+
+    @* Render each added tag as a chip *@
+    @foreach (var tag in Tags)
+    {
+        var currentTag = tag; // Capture for lambda closure
+        <span class="tag-chip" role="listitem">
+            <span>@currentTag</span>
+            <button type="button"
+                    class="tag-chip-remove"
+                    @onclick="() => RemoveTag(currentTag)"
+                    @onclick:stopPropagation="true"
+                    aria-label="Remove tag: @currentTag">
+                &times;
+            </button>
+        </span>
+    }
+
+    @* The text input for typing new tags *@
+    <input @ref="_inputRef"
+           type="text"
+           class="tag-input-field"
+           placeholder="@(Tags.Count == 0 ? "Add tags... (press Enter)" : "")"
+           @bind="_inputValue"
+           @bind:event="oninput"
+           @onkeydown="HandleKeyDown"
+           maxlength="50"
+           aria-label="Type a tag and press Enter" />
+</div>
+
+@if (Tags.Count >= 20)
+{
+    <small class="text-muted">Maximum 20 tags reached.</small>
+}
+
+@code {
+    // Reference to the input element so we can focus it programmatically
+    private ElementReference _inputRef;
+    // The current text in the input field (before it becomes a tag)
+    private string _inputValue = string.Empty;
+
+    /// <summary>Gets or sets the current list of tags.</summary>
+    [Parameter] public List<string> Tags { get; set; } = new();
+
+    /// <summary>Gets or sets the callback invoked when the tag list changes.</summary>
+    [Parameter] public EventCallback<List<string>> TagsChanged { get; set; }
+
+    /// <summary>
+    /// Handles keyboard events in the tag input field.
+    /// Enter or comma: adds the current text as a new tag.
+    /// Backspace (when input is empty): removes the last tag.
+    /// </summary>
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if ((e.Key == "Enter" || e.Key == ",") && !string.IsNullOrWhiteSpace(_inputValue))
+        {
+            await AddTag();
+        }
+        else if (e.Key == "Backspace" && string.IsNullOrEmpty(_inputValue) && Tags.Count > 0)
+        {
+            // Remove the last tag when Backspace is pressed in an empty input
+            await RemoveTag(Tags[^1]);
+        }
+    }
+
+    private async Task AddTag()
+    {
+        // Trim and remove leading # character (tags are stored without #)
+        var tag = _inputValue.Trim().TrimStart('#').Trim();
+
+        if (string.IsNullOrEmpty(tag))
+        {
+            _inputValue = string.Empty;
+            return;
+        }
+
+        // Don't add duplicate tags (case-insensitive comparison)
+        if (!Tags.Any(t => t.Equals(tag, StringComparison.OrdinalIgnoreCase)) && Tags.Count < 20)
+        {
+            var newTags = new List<string>(Tags) { tag };
+            await TagsChanged.InvokeAsync(newTags);
+        }
+
+        _inputValue = string.Empty;
+    }
+
+    private async Task RemoveTag(string tag)
+    {
+        var newTags = new List<string>(Tags);
+        newTags.Remove(tag);
+        await TagsChanged.InvokeAsync(newTags);
+    }
+
+    // Focus the text input when the container div is clicked
+    private async Task FocusInput()
+    {
+        await _inputRef.FocusAsync();
+    }
+}

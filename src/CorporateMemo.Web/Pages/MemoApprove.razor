@@ -1,0 +1,228 @@
+@*
+    MemoApprove.razor — Approval action page accessible from email links.
+    Shows a summary of the memo and allows the approver to approve or reject.
+    URL pattern: /memo/{id}/approve or /memo/{id}/reject
+*@
+@page "/memo/{MemoId:guid}/approve"
+@page "/memo/{MemoId:guid}/reject"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using CorporateMemo.Application.DTOs
+@using CorporateMemo.Application.Memos.Commands
+@using CorporateMemo.Application.Memos.Queries
+@using CorporateMemo.Application.Interfaces
+@using CorporateMemo.Domain.Enums
+@inject MediatR.IMediator Mediator
+@inject NavigationManager Nav
+@inject ICurrentUserService CurrentUser
+
+<PageTitle>Review Memo — Corporate Memo System</PageTitle>
+
+@if (_isLoading)
+{
+    <div class="text-center py-5" aria-live="polite">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else if (_memo == null)
+{
+    <div class="alert alert-warning">Memo not found or you do not have permission to approve it.</div>
+}
+else
+{
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="/memo/@MemoId">@_memo.MemoNumber</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Review</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-8">
+            @if (!string.IsNullOrEmpty(_resultMessage))
+            {
+                <div class="alert @(_isSuccess ? "alert-success" : "alert-danger")" role="alert">
+                    <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle") me-2" aria-hidden="true"></i>
+                    @_resultMessage
+                    <div class="mt-3">
+                        <a href="/memo/@MemoId" class="btn btn-primary btn-sm me-2">View Memo</a>
+                        <a href="/" class="btn btn-secondary btn-sm">Dashboard</a>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white border-bottom">
+                        <h1 class="fs-4 fw-bold mb-0">Review Memo</h1>
+                    </div>
+                    <div class="card-body">
+                        @* Memo summary *@
+                        <table class="table table-borderless mb-4">
+                            <tbody>
+                                <tr>
+                                    <th scope="row" class="text-muted" style="width: 140px;">Memo Number</th>
+                                    <td><span class="memo-number">@_memo.MemoNumber</span></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" class="text-muted">Title</th>
+                                    <td><strong>@_memo.Title</strong></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" class="text-muted">Author</th>
+                                    <td>@_memo.AuthorName (@_memo.AuthorEmail)</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" class="text-muted">Date</th>
+                                    <td>@_memo.DateCreated.ToString("MMMM d, yyyy")</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" class="text-muted">Status</th>
+                                    <td><StatusBadge Status="@_memo.Status" /></td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        @* Content preview *@
+                        <div class="border rounded p-3 bg-light mb-4">
+                            <h2 class="fs-6 fw-semibold text-muted mb-2">Content Preview</h2>
+                            <div style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">
+                                @_memo.Content
+                            </div>
+                        </div>
+
+                        @* Comment field *@
+                        <div class="mb-4">
+                            <label for="approval-comment" class="form-label fw-semibold">
+                                Comment (Optional for approval, recommended for rejection)
+                            </label>
+                            <textarea id="approval-comment"
+                                      class="form-control"
+                                      rows="3"
+                                      @bind="_comment"
+                                      placeholder="Add your comments here..."
+                                      maxlength="500"></textarea>
+                        </div>
+
+                        @* Action buttons *@
+                        <div class="d-flex gap-3 flex-wrap">
+                            <button class="btn btn-success btn-lg"
+                                    @onclick="Approve"
+                                    disabled="@(_isActing || _memo.Status != MemoStatus.PendingApproval)">
+                                @if (_isActing && _actingType == "approve")
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                                }
+                                <i class="bi bi-check-circle me-2" aria-hidden="true"></i>Approve
+                            </button>
+                            <button class="btn btn-danger btn-lg"
+                                    @onclick="Reject"
+                                    disabled="@(_isActing || _memo.Status != MemoStatus.PendingApproval)">
+                                @if (_isActing && _actingType == "reject")
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                                }
+                                <i class="bi bi-x-circle me-2" aria-hidden="true"></i>Reject
+                            </button>
+                            <a href="/memo/@MemoId" class="btn btn-outline-secondary btn-lg">
+                                <i class="bi bi-eye me-2" aria-hidden="true"></i>View Full Memo
+                            </a>
+                        </div>
+
+                        @if (_memo.Status != MemoStatus.PendingApproval)
+                        {
+                            <div class="alert alert-info mt-3" role="alert">
+                                <i class="bi bi-info-circle me-2" aria-hidden="true"></i>
+                                This memo is no longer pending approval. Current status: <StatusBadge Status="@_memo.Status" />
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid MemoId { get; set; }
+
+    private MemoDto? _memo;
+    private bool _isLoading = true;
+    private bool _isActing;
+    private string _actingType = string.Empty;
+    private string _comment = string.Empty;
+    private string? _resultMessage;
+    private bool _isSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _memo = await Mediator.Send(new GetMemoByIdQuery { MemoId = MemoId });
+
+            // Verify this user is actually an assigned approver
+            if (!_memo.ApprovalSteps.Any(s => s.ApproverId == CurrentUser.UserId))
+            {
+                _memo = null; // Hide the form
+                _resultMessage = "You are not assigned as an approver for this memo.";
+                _isSuccess = false;
+            }
+        }
+        catch (Exception)
+        {
+            _memo = null;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task Approve()
+    {
+        _isActing = true;
+        _actingType = "approve";
+        try
+        {
+            _memo = await Mediator.Send(new ApproveMemoCommand
+            {
+                MemoId = MemoId,
+                Comment = _comment,
+                BaseUrl = Nav.BaseUri.TrimEnd('/')
+            });
+            _resultMessage = "You have approved this memo. The author has been notified.";
+            _isSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            _resultMessage = "Failed to approve: " + ex.Message;
+            _isSuccess = false;
+        }
+        finally { _isActing = false; }
+    }
+
+    private async Task Reject()
+    {
+        _isActing = true;
+        _actingType = "reject";
+        try
+        {
+            _memo = await Mediator.Send(new RejectMemoCommand
+            {
+                MemoId = MemoId,
+                Comment = _comment,
+                BaseUrl = Nav.BaseUri.TrimEnd('/')
+            });
+            _resultMessage = "You have rejected this memo. The author has been notified.";
+            _isSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            _resultMessage = "Failed to reject: " + ex.Message;
+            _isSuccess = false;
+        }
+        finally { _isActing = false; }
+    }
+}

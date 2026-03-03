@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Target .NET 8.0 as required by the project constitution -->
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Enable XML documentation generation for all public members -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- EF Core SQL Server provider: connects our application to SQL Server database -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0" />
+    <!-- EF Core Tools: enables migrations (dotnet ef migrations add) -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0" />
+    <!-- Identity with EF Core: integrates ASP.NET Core Identity into our DbContext -->
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.0" />
+    <!-- MailKit: cross-platform email library for sending emails via SMTP -->
+    <PackageReference Include="MailKit" Version="4.3.0" />
+    <!-- MimeKit: MIME message composition library used by MailKit (4.8.0 fixes known vulnerabilities) -->
+    <PackageReference Include="MimeKit" Version="4.8.0" />
+    <!-- Options pattern: for binding configuration sections to strongly typed classes -->
+    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.0" />
+    <!-- Configuration.Binder: provides the Bind extension method on IConfiguration -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="8.0.0" />
+    <!-- Logging abstractions -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference Application project - Infrastructure implements Application interfaces -->
+    <ProjectReference Include="..\CorporateMemo.Application\CorporateMemo.Application.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,126 @@
+@*
+    NotificationPanel.razor — Offcanvas drawer showing the user's notification list.
+    Appears from the right side when the notification bell is clicked.
+    Each notification item is clickable and navigates to the related memo.
+*@
+@using CorporateMemo.Application.DTOs
+@using CorporateMemo.Domain.Enums
+@inject NavigationManager Nav
+
+@* Bootstrap offcanvas component — slide-in panel from the right *@
+<div class="offcanvas offcanvas-end @(IsOpen ? "show" : "")"
+     tabindex="-1"
+     aria-labelledby="notificationPanelTitle"
+     style="@(IsOpen ? "visibility: visible;" : "")">
+
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title fw-semibold" id="notificationPanelTitle">
+            <i class="bi bi-bell me-2" aria-hidden="true"></i>Notifications
+        </h5>
+        <button type="button"
+                class="btn-close"
+                @onclick="ClosePanel"
+                aria-label="Close notifications panel"></button>
+    </div>
+
+    <div class="offcanvas-body p-0">
+        @if (Notifications == null || !Notifications.Any())
+        {
+            @* Empty state *@
+            <div class="text-center text-muted p-5">
+                <i class="bi bi-bell-slash fs-2 d-block mb-2" aria-hidden="true"></i>
+                <p>No notifications yet.</p>
+            </div>
+        }
+        else
+        {
+            @* Notification list *@
+            <div role="list" aria-label="Notifications">
+                @foreach (var notification in Notifications)
+                {
+                    <div class="notification-item @(notification.IsRead ? "" : "unread")"
+                         role="listitem"
+                         @onclick="() => NavigateToMemo(notification)"
+                         @onkeydown="@(e => { if (e.Key == "Enter") NavigateToMemo(notification); })"
+                         tabindex="0"
+                         aria-label="@notification.Message">
+
+                        <div class="d-flex gap-2 align-items-start">
+                            @* Notification type icon *@
+                            <i class="@GetNotificationIcon(notification.Type) fs-5 mt-1 flex-shrink-0"
+                               aria-hidden="true"
+                               style="color: @GetNotificationColor(notification.Type);"></i>
+
+                            <div class="flex-grow-1 min-w-0">
+                                <p class="mb-1 small @(notification.IsRead ? "" : "fw-semibold")">
+                                    @notification.Message
+                                </p>
+                                <span class="notification-time">
+                                    @notification.RelativeTime
+                                </span>
+                            </div>
+
+                            @* Unread indicator dot *@
+                            @if (!notification.IsRead)
+                            {
+                                <span class="badge bg-primary rounded-pill ms-1 flex-shrink-0" style="font-size: 0.5rem; padding: 0.3em;"
+                                      aria-label="Unread">
+                                    &bull;
+                                </span>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@* Backdrop overlay when panel is open *@
+@if (IsOpen)
+{
+    <div class="offcanvas-backdrop fade show" @onclick="ClosePanel" aria-hidden="true"></div>
+}
+
+@code {
+    /// <summary>Gets or sets whether the notification panel is currently visible.</summary>
+    [Parameter] public bool IsOpen { get; set; }
+
+    /// <summary>Gets or sets the list of notifications to display.</summary>
+    [Parameter] public List<NotificationDto> Notifications { get; set; } = new();
+
+    /// <summary>Gets or sets the callback invoked when the panel is closed.</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private async Task ClosePanel()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private void NavigateToMemo(NotificationDto notification)
+    {
+        if (notification.MemoId.HasValue)
+        {
+            Nav.NavigateTo($"/memo/{notification.MemoId.Value}");
+        }
+        _ = ClosePanel();
+    }
+
+    /// <summary>Returns the Bootstrap Icons class for the notification type icon.</summary>
+    private static string GetNotificationIcon(NotificationType type) => type switch
+    {
+        NotificationType.ApprovalRequested => "bi bi-clipboard-check",
+        NotificationType.ApprovalDecision => "bi bi-check-circle",
+        NotificationType.MemoPublished => "bi bi-file-earmark-check",
+        _ => "bi bi-bell"
+    };
+
+    /// <summary>Returns the color for the notification type icon.</summary>
+    private static string GetNotificationColor(NotificationType type) => type switch
+    {
+        NotificationType.ApprovalRequested => "#ffc107",
+        NotificationType.ApprovalDecision => "#198754",
+        NotificationType.MemoPublished => "#0dcaf0",
+        _ => "#6c757d"
+    };
+}

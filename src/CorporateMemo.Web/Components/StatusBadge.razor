@@ -1,0 +1,45 @@
+@*
+    StatusBadge.razor — Renders a colored Bootstrap badge for a MemoStatus value.
+    This component ensures consistent status badge styling throughout the application.
+    Color meanings match the UX design document's color palette.
+*@
+@using CorporateMemo.Domain.Enums
+
+@* The badge element — aria-label makes the status accessible to screen readers *@
+<span class="badge memo-status-badge @BadgeClass" aria-label="Status: @StatusText">
+    @StatusText
+</span>
+
+@code {
+    /// <summary>Gets or sets the memo status to display as a colored badge.</summary>
+    [Parameter, EditorRequired]
+    public MemoStatus Status { get; set; }
+
+    /// <summary>
+    /// Computes the CSS class for the badge based on the status.
+    /// Each status has a unique color per the UX design document.
+    /// </summary>
+    private string BadgeClass => Status switch
+    {
+        MemoStatus.Draft => "badge-draft",
+        MemoStatus.PendingApproval => "badge-pending",
+        MemoStatus.Approved => "badge-approved",
+        MemoStatus.Rejected => "badge-rejected",
+        MemoStatus.Published => "badge-published",
+        _ => "badge-secondary"
+    };
+
+    /// <summary>
+    /// Returns the human-readable text for the status badge.
+    /// "PendingApproval" is displayed as "Pending Approval" for readability.
+    /// </summary>
+    private string StatusText => Status switch
+    {
+        MemoStatus.Draft => "Draft",
+        MemoStatus.PendingApproval => "Pending Approval",
+        MemoStatus.Approved => "Approved",
+        MemoStatus.Rejected => "Rejected",
+        MemoStatus.Published => "Published",
+        _ => Status.ToString()
+    };
+}

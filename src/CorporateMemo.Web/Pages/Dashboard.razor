@@ -1,0 +1,491 @@
+@*
+    Dashboard.razor — The main user dashboard showing memos in three tabs.
+    Tabs: All Documents (Published), My Documents (all statuses), My Approvals (pending approvals).
+    Features: search toolbar, advanced search panel, sortable data table, pagination.
+*@
+@page "/"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using CorporateMemo.Application.DTOs
+@using CorporateMemo.Application.Memos.Queries
+@using CorporateMemo.Domain.Enums
+@inject MediatR.IMediator Mediator
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard — Corporate Memo System</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="fs-2 fw-bold text-dark mb-0">Dashboard</h1>
+    @* Create New Memo button *@
+    <a href="/memo/create" class="btn btn-primary">
+        <i class="bi bi-plus-circle me-2" aria-hidden="true"></i>New Memo
+    </a>
+</div>
+
+@* ============================
+   SEARCH TOOLBAR
+   ============================ *@
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-center">
+            @* Simple search *@
+            <div class="col-md-6">
+                <div class="input-group">
+                    <input type="search"
+                           class="form-control"
+                           placeholder="Search memos by title, content, or tags..."
+                           @bind="_searchTerm"
+                           @bind:event="oninput"
+                           @onkeydown="@(e => { if (e.Key == "Enter") _ = LoadCurrentTab(); })"
+                           aria-label="Search memos" />
+                    <button class="btn btn-primary" type="button" @onclick="() => _ = LoadCurrentTab()" aria-label="Search">
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </div>
+            @* Advanced search toggle *@
+            <div class="col-md-6 d-flex gap-2">
+                <button class="btn btn-outline-secondary" type="button" @onclick="ToggleAdvancedSearch">
+                    <i class="bi bi-funnel me-1" aria-hidden="true"></i>
+                    Advanced @(_showAdvancedSearch ? "▲" : "▼")
+                </button>
+                @if (HasActiveFilters())
+                {
+                    <button class="btn btn-outline-danger btn-sm" type="button" @onclick="ClearFilters">
+                        <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Clear Filters
+                    </button>
+                }
+            </div>
+        </div>
+
+        @* Advanced search panel — expandable *@
+        @if (_showAdvancedSearch)
+        {
+            <div class="border-top mt-2 pt-2">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Status</label>
+                        <select class="form-select form-select-sm" @bind="_filterStatus">
+                            <option value="">All Statuses</option>
+                            @foreach (MemoStatus status in Enum.GetValues<MemoStatus>())
+                            {
+                                <option value="@((int)status)">@status.ToString()</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Date From</label>
+                        <input type="date" class="form-control form-control-sm"
+                               @bind="_filterDateFrom" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Date To</label>
+                        <input type="date" class="form-control form-control-sm"
+                               @bind="_filterDateTo" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Tag</label>
+                        <input type="text" class="form-control form-control-sm"
+                               placeholder="e.g., finance"
+                               @bind="_filterTag" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Confidential</label>
+                        <select class="form-select form-select-sm" @bind="_filterConfidential">
+                            <option value="">All</option>
+                            <option value="true">Confidential Only</option>
+                            <option value="false">Non-Confidential Only</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <button class="btn btn-primary btn-sm" @onclick="() => _ = LoadCurrentTab()">
+                            <i class="bi bi-search me-1"></i>Apply Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@* ============================
+   THREE-TAB NAVIGATION
+   ============================ *@
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link @(_activeTab == TabAllDocs ? "active" : "")"
+                @onclick="SwitchToAllDocs"
+                role="tab"
+                aria-selected="@(_activeTab == TabAllDocs)"
+                aria-controls="all-docs-panel">
+            <i class="bi bi-files me-1" aria-hidden="true"></i>All Documents
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link @(_activeTab == TabMyDocs ? "active" : "")"
+                @onclick="SwitchToMyDocs"
+                role="tab"
+                aria-selected="@(_activeTab == TabMyDocs)"
+                aria-controls="my-docs-panel">
+            <i class="bi bi-person me-1" aria-hidden="true"></i>My Documents
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link @(_activeTab == TabApprovals ? "active" : "")"
+                @onclick="SwitchToApprovals"
+                role="tab"
+                aria-selected="@(_activeTab == TabApprovals)"
+                aria-controls="approvals-panel">
+            <i class="bi bi-check2-circle me-1" aria-hidden="true"></i>My Approvals
+            @if (_approvalCount > 0)
+            {
+                <span class="badge bg-warning text-dark ms-1">@_approvalCount</span>
+            }
+        </button>
+    </li>
+</ul>
+
+@* ============================
+   MEMO DATA TABLE
+   ============================ *@
+@if (_isLoading)
+{
+    @* Loading spinner *@
+    <div class="text-center py-5" aria-live="polite" aria-label="Loading memos">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted">Loading memos...</p>
+    </div>
+}
+else if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <div class="alert alert-danger" role="alert">
+        <i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>
+        @_errorMessage
+    </div>
+}
+else if (!_memos.Any())
+{
+    @* Empty state *@
+    <div class="text-center py-5 text-muted">
+        <i class="bi bi-inbox fs-1 d-block mb-3" aria-hidden="true"></i>
+        <p class="fs-5">No memos found.</p>
+        @if (_activeTab == TabAllDocs)
+        {
+            <p>Published memos will appear here.</p>
+        }
+        else if (_activeTab == TabMyDocs)
+        {
+            <p>Create your first memo to get started.</p>
+            <a href="/memo/create" class="btn btn-primary mt-2">
+                <i class="bi bi-plus-circle me-2"></i>New Memo
+            </a>
+        }
+        else
+        {
+            <p>Memos awaiting your approval will appear here.</p>
+        }
+    </div>
+}
+else
+{
+    @* Memo table — all columns are sortable by clicking the header *@
+    <div class="table-responsive">
+        <table class="table table-hover align-middle" aria-label="Memo list">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col" class="sortable-header" @onclick="SortByMemoNumber"
+                        aria-sort="@GetAriaSort(SortMemoNumber)">
+                        Memo # <span class="sort-icon">@GetSortIcon(SortMemoNumber)</span>
+                    </th>
+                    <th scope="col" class="sortable-header" @onclick="SortByTitle"
+                        aria-sort="@GetAriaSort(SortTitle)">
+                        Title <span class="sort-icon">@GetSortIcon(SortTitle)</span>
+                    </th>
+                    <th scope="col" class="sortable-header" @onclick="SortByAuthor"
+                        aria-sort="@GetAriaSort(SortAuthor)">
+                        Author <span class="sort-icon">@GetSortIcon(SortAuthor)</span>
+                    </th>
+                    <th scope="col" class="sortable-header" @onclick="SortByDate"
+                        aria-sort="@GetAriaSort(SortDate)">
+                        Date <span class="sort-icon">@GetSortIcon(SortDate)</span>
+                    </th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Tags</th>
+                    <th scope="col"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var memo in GetPagedMemos())
+                {
+                    <tr>
+                        <td>
+                            <span class="memo-number">@memo.MemoNumber</span>
+                            @if (memo.IsConfidential)
+                            {
+                                <i class="bi bi-lock-fill text-warning ms-1"
+                                   aria-label="Confidential"
+                                   title="Confidential memo"></i>
+                            }
+                        </td>
+                        <td>
+                            <a href="/memo/@memo.Id" class="memo-title-link">@memo.Title</a>
+                        </td>
+                        <td>@memo.AuthorName</td>
+                        <td>
+                            <span title="@memo.DateCreated.ToString("yyyy-MM-dd HH:mm") UTC">
+                                @memo.DateCreated.ToString("MMM d, yyyy")
+                            </span>
+                        </td>
+                        <td>
+                            <StatusBadge Status="@memo.Status" />
+                        </td>
+                        <td>
+                            @if (memo.Tags.Any())
+                            {
+                                <span class="small text-muted">@memo.TagsDisplay</span>
+                            }
+                        </td>
+                        <td>
+                            <a href="/memo/@memo.Id" class="btn btn-sm btn-outline-primary" aria-label="View memo: @memo.Title">
+                                <i class="bi bi-eye" aria-hidden="true"></i>
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @* Pagination controls *@
+    @if (TotalPages > 1)
+    {
+        <nav aria-label="Memo list pagination">
+            <ul class="pagination justify-content-center">
+                <li class="page-item @(_currentPage <= 1 ? "disabled" : "")">
+                    <button class="page-link" @onclick="() => GoToPage(_currentPage - 1)"
+                            aria-label="Previous page" disabled="@(_currentPage <= 1)">
+                        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                    </button>
+                </li>
+
+                @for (var p = 1; p <= TotalPages; p++)
+                {
+                    var pageNum = p;
+                    <li class="page-item @(pageNum == _currentPage ? "active" : "")">
+                        <button class="page-link" @onclick="() => GoToPage(pageNum)"
+                                aria-label="Page @pageNum" aria-current="@(pageNum == _currentPage ? "page" : null)">
+                            @pageNum
+                        </button>
+                    </li>
+                }
+
+                <li class="page-item @(_currentPage >= TotalPages ? "disabled" : "")">
+                    <button class="page-link" @onclick="() => GoToPage(_currentPage + 1)"
+                            aria-label="Next page" disabled="@(_currentPage >= TotalPages)">
+                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                    </button>
+                </li>
+            </ul>
+        </nav>
+        <p class="text-center text-muted small">
+            Showing @((_currentPage - 1) * PageSize + 1)–@(Math.Min(_currentPage * PageSize, _memos.Count)) of @_memos.Count memos
+        </p>
+    }
+}
+
+@code {
+    // ===========================
+    // Constants for tab and sort field names
+    // Using constants avoids string literals in Razor markup (which cause syntax errors)
+    // ===========================
+    private const string TabAllDocs = "alldocs";
+    private const string TabMyDocs = "mydocs";
+    private const string TabApprovals = "approvals";
+    private const string SortMemoNumber = "memonumber";
+    private const string SortTitle = "title";
+    private const string SortAuthor = "author";
+    private const string SortDate = "date";
+
+    // ===========================
+    // State
+    // ===========================
+    private string _activeTab = TabAllDocs;
+    private List<MemoSummaryDto> _memos = new();
+    private bool _isLoading;
+    private string? _errorMessage;
+    private int _approvalCount;
+
+    // Search and filter state
+    private string _searchTerm = string.Empty;
+    private bool _showAdvancedSearch;
+    private string _filterStatus = string.Empty;
+    private DateTime? _filterDateFrom;
+    private DateTime? _filterDateTo;
+    private string _filterTag = string.Empty;
+    private string _filterConfidential = string.Empty;
+
+    // Sort state
+    private string _sortField = SortDate;
+    private bool _sortAscending;
+
+    // Pagination state
+    private int _currentPage = 1;
+    private const int PageSize = 20;
+    private int TotalPages => (int)Math.Ceiling(_memos.Count / (double)PageSize);
+
+    // ===========================
+    // Tab switch helpers — avoid string literals in Razor markup
+    private async Task SwitchToAllDocs() => await SwitchTab(TabAllDocs);
+    private async Task SwitchToMyDocs() => await SwitchTab(TabMyDocs);
+    private async Task SwitchToApprovals() => await SwitchTab(TabApprovals);
+
+    // Sort helpers — avoid string literals in Razor markup
+    private void SortByMemoNumber() => Sort(SortMemoNumber);
+    private void SortByTitle() => Sort(SortTitle);
+    private void SortByAuthor() => Sort(SortAuthor);
+    private void SortByDate() => Sort(SortDate);
+
+    // ===========================
+    // Query string parameter
+    // ===========================
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? TabParam { get; set; }
+
+    /// <summary>On initialization, load the initial tab (from query string or default).</summary>
+    protected override async Task OnInitializedAsync()
+    {
+        // Set the active tab from the query string if provided
+        if (!string.IsNullOrEmpty(TabParam) && (TabParam == TabMyDocs || TabParam == TabApprovals))
+            _activeTab = TabParam;
+
+        await LoadCurrentTab();
+    }
+
+    private async Task SwitchTab(string tab)
+    {
+        _activeTab = tab;
+        _currentPage = 1;
+        await LoadCurrentTab();
+    }
+
+    private async Task LoadCurrentTab()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            // Parse filter values
+            MemoStatus? statusFilter = string.IsNullOrEmpty(_filterStatus) ? null : (MemoStatus?)int.Parse(_filterStatus);
+            bool? confidentialFilter = string.IsNullOrEmpty(_filterConfidential) ? null : bool.Parse(_filterConfidential);
+            List<string>? tagFilter = string.IsNullOrEmpty(_filterTag) ? null : new List<string> { _filterTag };
+
+            if (_activeTab == TabAllDocs)
+            {
+                // All Documents: only Published memos visible to everyone
+                var allMemosQuery = new GetAllMemosQuery
+                {
+                    Status = statusFilter ?? MemoStatus.Published,
+                    SearchTerm = string.IsNullOrWhiteSpace(_searchTerm) ? null : _searchTerm,
+                    Tags = tagFilter,
+                    DateFrom = _filterDateFrom,
+                    DateTo = _filterDateTo
+                };
+                _memos = await Mediator.Send(allMemosQuery);
+            }
+            else if (_activeTab == TabMyDocs)
+            {
+                // My Documents: all memos by the current user
+                _memos = await Mediator.Send(new GetMyMemosQuery());
+                // Apply client-side filters for My Documents (status, search term)
+                if (statusFilter.HasValue)
+                    _memos = _memos.Where(m => m.Status == statusFilter.Value).ToList();
+                if (!string.IsNullOrWhiteSpace(_searchTerm))
+                    _memos = _memos.Where(m =>
+                        m.Title.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                        m.Tags.Any(t => t.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase))).ToList();
+            }
+            else if (_activeTab == TabApprovals)
+            {
+                // My Approvals: memos pending this user's approval
+                _memos = await Mediator.Send(new GetMyApprovalsQuery());
+                _approvalCount = _memos.Count;
+            }
+
+            // Apply sort
+            ApplySort();
+        }
+        catch (Exception)
+        {
+            _errorMessage = "An error occurred while loading memos. Please try again.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void Sort(string field)
+    {
+        if (_sortField == field)
+            _sortAscending = !_sortAscending; // Toggle direction
+        else
+        {
+            _sortField = field;
+            _sortAscending = true; // Default ascending for new field
+        }
+        _currentPage = 1;
+        ApplySort();
+    }
+
+    private void ApplySort()
+    {
+        _memos = _sortField switch
+        {
+            SortMemoNumber => _sortAscending ? _memos.OrderBy(m => m.MemoNumber).ToList() : _memos.OrderByDescending(m => m.MemoNumber).ToList(),
+            SortTitle => _sortAscending ? _memos.OrderBy(m => m.Title).ToList() : _memos.OrderByDescending(m => m.Title).ToList(),
+            SortAuthor => _sortAscending ? _memos.OrderBy(m => m.AuthorName).ToList() : _memos.OrderByDescending(m => m.AuthorName).ToList(),
+            _ => _sortAscending ? _memos.OrderBy(m => m.DateCreated).ToList() : _memos.OrderByDescending(m => m.DateCreated).ToList()
+        };
+    }
+
+    private IEnumerable<MemoSummaryDto> GetPagedMemos()
+    {
+        return _memos.Skip((_currentPage - 1) * PageSize).Take(PageSize);
+    }
+
+    private void GoToPage(int page)
+    {
+        if (page >= 1 && page <= TotalPages)
+        {
+            _currentPage = page;
+        }
+    }
+
+    private string GetSortIcon(string field) =>
+        _sortField != field ? "⇅" : (_sortAscending ? "↑" : "↓");
+
+    private string GetAriaSort(string field) =>
+        _sortField != field ? "none" : (_sortAscending ? "ascending" : "descending");
+
+    private void ToggleAdvancedSearch() => _showAdvancedSearch = !_showAdvancedSearch;
+
+    private bool HasActiveFilters() =>
+        !string.IsNullOrEmpty(_filterStatus) ||
+        _filterDateFrom.HasValue ||
+        _filterDateTo.HasValue ||
+        !string.IsNullOrEmpty(_filterTag) ||
+        !string.IsNullOrEmpty(_filterConfidential);
+
+    private async Task ClearFilters()
+    {
+        _filterStatus = string.Empty;
+        _filterDateFrom = null;
+        _filterDateTo = null;
+        _filterTag = string.Empty;
+        _filterConfidential = string.Empty;
+        _searchTerm = string.Empty;
+        await LoadCurrentTab();
+    }
+}

@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Target net10.0 so the test runner can execute on the installed .NET 10 runtime.
+         The production projects target net8.0 which is fully compatible with net10.0. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Tell MSBuild this is a test project so dotnet test can discover it -->
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- xUnit: the unit testing framework used throughout this project -->
+    <PackageReference Include="xunit" Version="2.7.0" />
+    <!-- xUnit runner for Visual Studio and dotnet test integration -->
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.7">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <!-- Coverlet for code coverage reporting -->
+    <PackageReference Include="coverlet.collector" Version="6.0.1">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <!-- Microsoft Test SDK required by dotnet test -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+    <!-- Pin Microsoft.Extensions.Caching.Memory to a patched version (fixes NU1903 high severity vuln) -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference the Domain project we are testing -->
+    <ProjectReference Include="..\..\src\CorporateMemo.Domain\CorporateMemo.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
