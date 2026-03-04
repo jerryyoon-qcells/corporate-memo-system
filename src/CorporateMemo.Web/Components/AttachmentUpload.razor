@@ -23,14 +23,14 @@
         <i class="bi bi-cloud-upload fs-2 d-block mb-2" aria-hidden="true"></i>
         <p class="mb-1 fw-semibold">Drop files here</p>
         <p class="small mb-0">or <span class="text-primary">click to browse</span></p>
-        <p class="small text-muted mt-1">Max @MaxFileSizeMb MB per file. Allowed: PDF, DOCX, XLSX, PNG, JPG, GIF, BMP</p>
+        <p class="small text-muted mt-1">Max @MaxFileSizeMb MB per file. Allowed: PDF, DOCX, XLSX, PPTX, PNG, JPG, GIF, BMP, TXT, CSV, ZIP, MSG</p>
     </div>
 
     @* Hidden file input — triggered by clicking the drop zone *@
     <InputFile @ref="_fileInput"
                OnChange="HandleFileSelection"
                multiple
-               accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg,.gif,.bmp"
+               accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.gif,.bmp,.txt,.csv,.zip,.msg"
                style="display: none;"
                aria-hidden="true" />
 
@@ -82,7 +82,7 @@
     [Parameter] public List<AttachmentDto> Attachments { get; set; } = new();
 
     /// <summary>Gets or sets the maximum file size in MB (from configuration).</summary>
-    [Parameter] public int MaxFileSizeMb { get; set; } = 10;
+    [Parameter] public int MaxFileSizeMb { get; set; } = 100;
 
     /// <summary>Gets or sets the callback invoked when a file is selected for upload.</summary>
     [Parameter] public EventCallback<IBrowserFile> OnFileSelected { get; set; }
@@ -108,16 +108,30 @@
         // The InputFile component handles the actual file picker dialog
     }
 
+    private static readonly string[] AllowedExtensions =
+    [
+        ".pdf", ".docx", ".xlsx", ".pptx", ".png", ".jpg", ".jpeg",
+        ".gif", ".bmp", ".txt", ".csv", ".zip", ".msg"
+    ];
+
     private async Task HandleFileSelection(InputFileChangeEventArgs e)
     {
         _errorMessage = null;
 
         foreach (var file in e.GetMultipleFiles(10)) // Max 10 files at once
         {
+            // Validate file type
+            var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+            if (!AllowedExtensions.Contains(ext))
+            {
+                _errorMessage = $"'{file.Name}' is not an allowed file type. Permitted: {string.Join(", ", AllowedExtensions).ToUpperInvariant()}";
+                continue;
+            }
+
             // Validate file size
             if (file.Size > (long)MaxFileSizeMb * 1024 * 1024)
             {
-                _errorMessage = $"File '{file.Name}' exceeds the maximum size of {MaxFileSizeMb} MB.";
+                _errorMessage = $"'{file.Name}' exceeds the maximum size of {MaxFileSizeMb} MB.";
                 continue;
             }
 
@@ -138,10 +152,15 @@
         var ext = Path.GetExtension(fileName).ToLower();
         return ext switch
         {
-            ".pdf" => "bi bi-file-earmark-pdf-fill text-danger",
-            ".docx" or ".doc" => "bi bi-file-earmark-word-fill text-primary",
-            ".xlsx" or ".xls" => "bi bi-file-earmark-excel-fill text-success",
+            ".pdf"  => "bi bi-file-earmark-pdf-fill text-danger",
+            ".docx" or ".doc"  => "bi bi-file-earmark-word-fill text-primary",
+            ".xlsx" or ".xls"  => "bi bi-file-earmark-excel-fill text-success",
+            ".pptx" or ".ppt"  => "bi bi-file-earmark-ppt-fill text-warning",
             ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" => "bi bi-file-earmark-image-fill text-info",
+            ".txt"  => "bi bi-file-earmark-text-fill text-secondary",
+            ".csv"  => "bi bi-file-earmark-spreadsheet-fill text-success",
+            ".zip"  => "bi bi-file-zip-fill text-dark",
+            ".msg"  => "bi bi-envelope-fill text-primary",
             _ => "bi bi-file-earmark-fill text-secondary"
         };
     }

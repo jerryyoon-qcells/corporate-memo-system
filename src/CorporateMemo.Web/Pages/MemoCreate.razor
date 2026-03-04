@@ -11,6 +11,7 @@
 @using CorporateMemo.Domain.Entities
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Identity
+@using System.Collections.Generic
 @inject MediatR.IMediator Mediator
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthProvider
@@ -155,17 +156,12 @@
 
                 @* To Recipients *@
                 <div class="mb-3">
-                    <label for="to-recipients" class="form-label fw-semibold">
+                    <label class="form-label fw-semibold">
                         To (Recipients) <span class="required-indicator" aria-hidden="true">*</span>
                     </label>
-                    <input id="to-recipients"
-                           type="text"
-                           class="form-control"
-                           placeholder="Enter email, press Enter to add..."
-                           @onkeydown="@(async e => { if (e.Key == "Enter") await AddToRecipient(); })"
-                           @bind="_toInput"
-                           @bind:event="oninput" />
-                    @* Display added recipients as chips *@
+                    <UserAutocomplete Placeholder="Search by name or email..."
+                                      ExcludedEmails="_toRecipients"
+                                      OnUserSelected="OnToUserSelected" />
                     <div class="d-flex flex-wrap gap-1 mt-1">
                         @foreach (var r in _toRecipients)
                         {
@@ -183,14 +179,10 @@
 
                 @* CC Recipients *@
                 <div class="mb-3">
-                    <label for="cc-recipients" class="form-label fw-semibold">CC (Optional)</label>
-                    <input id="cc-recipients"
-                           type="text"
-                           class="form-control"
-                           placeholder="Enter email, press Enter to add..."
-                           @onkeydown="@(async e => { if (e.Key == "Enter") await AddCcRecipient(); })"
-                           @bind="_ccInput"
-                           @bind:event="oninput" />
+                    <label class="form-label fw-semibold">CC (Optional)</label>
+                    <UserAutocomplete Placeholder="Search by name or email..."
+                                      ExcludedEmails="_ccRecipients"
+                                      OnUserSelected="OnCcUserSelected" />
                     <div class="d-flex flex-wrap gap-1 mt-1">
                         @foreach (var r in _ccRecipients)
                         {
@@ -217,7 +209,7 @@
 
                 @* Confidential toggle *@
                 <div class="mb-3">
-                    <div class="form-check form-switch">
+                    <div class="form-check form-switch d-flex align-items-center gap-2">
                         <input class="form-check-input"
                                type="checkbox"
                                id="confidential-toggle"
@@ -226,8 +218,8 @@
                         <label class="form-check-label fw-semibold" for="confidential-toggle">
                             <i class="bi bi-lock me-1" aria-hidden="true"></i>Confidential
                         </label>
+                        <InfoPopup Text="Confidential option lets only users in Recipients and CC list open the memo while all users can see the title and memo info on All Documents list." />
                     </div>
-                    <small class="text-muted">Mark this memo as confidential.</small>
                 </div>
             </div>
         </div>
@@ -280,10 +272,6 @@
     private List<AttachmentDto> _attachments = new();
     private bool _isConfidential;
 
-    // Temporary input values for recipient fields
-    private string _toInput = string.Empty;
-    private string _ccInput = string.Empty;
-
     // Author info (populated on init from auth state)
     private string _authorName = string.Empty;
     private string _authorEmail = string.Empty;
@@ -318,20 +306,20 @@
         }
     }
 
-    private async Task AddToRecipient()
+    private Task OnToUserSelected(ApplicationUser user)
     {
-        var email = _toInput.Trim();
-        if (!string.IsNullOrEmpty(email) && !_toRecipients.Contains(email))
+        var email = user.Email ?? string.Empty;
+        if (!_toRecipients.Contains(email, StringComparer.OrdinalIgnoreCase))
             _toRecipients.Add(email);
-        _toInput = string.Empty;
+        return Task.CompletedTask;
     }
 
-    private async Task AddCcRecipient()
+    private Task OnCcUserSelected(ApplicationUser user)
     {
-        var email = _ccInput.Trim();
-        if (!string.IsNullOrEmpty(email) && !_ccRecipients.Contains(email))
+        var email = user.Email ?? string.Empty;
+        if (!_ccRecipients.Contains(email, StringComparer.OrdinalIgnoreCase))
             _ccRecipients.Add(email);
-        _ccInput = string.Empty;
+        return Task.CompletedTask;
     }
 
     private bool ValidateForm()
@@ -460,7 +448,7 @@
         {
             try
             {
-                using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+                using var stream = file.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
                 var command = new UploadAttachmentCommand
                 {
                     MemoId = _createdMemoId.Value,

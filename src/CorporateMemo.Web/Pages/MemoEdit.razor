@@ -16,6 +16,7 @@
 @inject MediatR.IMediator Mediator
 @inject NavigationManager Nav
 @inject ICurrentUserService CurrentUser
+@inject UserManager<ApplicationUser> UserManager
 @inject ILogger<MemoEdit> Logger
 
 <PageTitle>Edit Memo — Corporate Memo System</PageTitle>
@@ -115,13 +116,12 @@ else
                         <TagInput Tags="_tags" TagsChanged="tags => _tags = tags" />
                     </div>
                     <div class="mb-3">
-                        <label for="edit-to" class="form-label fw-semibold">
+                        <label class="form-label fw-semibold">
                             To (Recipients) <span class="required-indicator" aria-hidden="true">*</span>
                         </label>
-                        <input id="edit-to" type="text" class="form-control"
-                               placeholder="Enter email, press Enter to add..."
-                               @onkeydown="@(async e => { if (e.Key == "Enter") await AddToRecipient(); })"
-                               @bind="_toInput" @bind:event="oninput" />
+                        <UserAutocomplete Placeholder="Search by name or email..."
+                                          ExcludedEmails="_toRecipients"
+                                          OnUserSelected="OnToUserSelected" />
                         <div class="d-flex flex-wrap gap-1 mt-1">
                             @foreach (var r in _toRecipients)
                             {
@@ -134,11 +134,10 @@ else
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label for="edit-cc" class="form-label fw-semibold">CC (Optional)</label>
-                        <input id="edit-cc" type="text" class="form-control"
-                               placeholder="Enter email, press Enter to add..."
-                               @onkeydown="@(async e => { if (e.Key == "Enter") await AddCcRecipient(); })"
-                               @bind="_ccInput" @bind:event="oninput" />
+                        <label class="form-label fw-semibold">CC (Optional)</label>
+                        <UserAutocomplete Placeholder="Search by name or email..."
+                                          ExcludedEmails="_ccRecipients"
+                                          OnUserSelected="OnCcUserSelected" />
                         <div class="d-flex flex-wrap gap-1 mt-1">
                             @foreach (var r in _ccRecipients)
                             {
@@ -157,12 +156,13 @@ else
                         <ApproverList Approvers="_approvers" ApproversChanged="approvers => _approvers = approvers" />
                     </div>
                     <div class="mb-3">
-                        <div class="form-check form-switch">
+                        <div class="form-check form-switch d-flex align-items-center gap-2">
                             <input class="form-check-input" type="checkbox" id="edit-confidential"
                                    @bind="_isConfidential" role="switch" />
                             <label class="form-check-label fw-semibold" for="edit-confidential">
                                 <i class="bi bi-lock me-1" aria-hidden="true"></i>Confidential
                             </label>
+                            <InfoPopup Text="Confidential option lets only users in Recipients and CC list open the memo while all users can see the title and memo info on All Documents list." />
                         </div>
                     </div>
                 </div>
@@ -205,8 +205,6 @@ else
     private List<ApproverInfo> _approvers = new();
     private List<AttachmentDto> _attachments = new();
     private bool _isConfidential;
-    private string _toInput = string.Empty;
-    private string _ccInput = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -256,18 +254,20 @@ else
         }
     }
 
-    private async Task AddToRecipient()
+    private Task OnToUserSelected(ApplicationUser user)
     {
-        if (!string.IsNullOrWhiteSpace(_toInput) && !_toRecipients.Contains(_toInput.Trim()))
-            _toRecipients.Add(_toInput.Trim());
-        _toInput = string.Empty;
+        var email = user.Email ?? string.Empty;
+        if (!_toRecipients.Contains(email, StringComparer.OrdinalIgnoreCase))
+            _toRecipients.Add(email);
+        return Task.CompletedTask;
     }
 
-    private async Task AddCcRecipient()
+    private Task OnCcUserSelected(ApplicationUser user)
     {
-        if (!string.IsNullOrWhiteSpace(_ccInput) && !_ccRecipients.Contains(_ccInput.Trim()))
-            _ccRecipients.Add(_ccInput.Trim());
-        _ccInput = string.Empty;
+        var email = user.Email ?? string.Empty;
+        if (!_ccRecipients.Contains(email, StringComparer.OrdinalIgnoreCase))
+            _ccRecipients.Add(email);
+        return Task.CompletedTask;
     }
 
     private UpdateMemoCommand BuildUpdateCommand() => new()
@@ -322,7 +322,7 @@ else
     {
         try
         {
-            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var stream = file.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
             var attachment = await Mediator.Send(new UploadAttachmentCommand
             {
                 MemoId = MemoId, FileName = file.Name, ContentType = file.ContentType,

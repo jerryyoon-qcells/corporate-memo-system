@@ -44,21 +44,10 @@
         </p>
     }
 
-    @* Add approver by email *@
-    <div class="input-group">
-        <input type="email"
-               class="form-control"
-               placeholder="Enter approver email address..."
-               @bind="_searchEmail"
-               @bind:event="oninput"
-               aria-label="Approver email address" />
-        <button class="btn btn-outline-primary"
-                type="button"
-                @onclick="AddApproverByEmail"
-                disabled="@(string.IsNullOrWhiteSpace(_searchEmail))">
-            <i class="bi bi-person-plus me-1" aria-hidden="true"></i>Add
-        </button>
-    </div>
+    @* Add approver by name or email *@
+    <UserAutocomplete Placeholder="Search approver by name or email..."
+                      ExcludedEmails="@(Approvers.Select(a => a.Email))"
+                      OnUserSelected="OnApproverUserSelected" />
 
     @if (!string.IsNullOrEmpty(_errorMessage))
     {
@@ -69,7 +58,6 @@
 </div>
 
 @code {
-    private string _searchEmail = string.Empty;
     private string? _errorMessage;
 
     /// <summary>Gets or sets the current list of approvers.</summary>
@@ -78,41 +66,37 @@
     /// <summary>Gets or sets the callback invoked when the approver list changes.</summary>
     [Parameter] public EventCallback<List<ApproverInfo>> ApproversChanged { get; set; }
 
-    private async Task AddApproverByEmail()
+    private async Task OnApproverUserSelected(ApplicationUser user)
     {
         _errorMessage = null;
 
-        if (string.IsNullOrWhiteSpace(_searchEmail))
-            return;
-
-        // Look up the user by email in the Identity database
-        var user = await UserManager.FindByEmailAsync(_searchEmail.Trim());
-        if (user == null)
+        // Only Admin or Collaborator users can approve memos
+        var roles = await UserManager.GetRolesAsync(user);
+        if (!roles.Any(r => r == "Admin" || r == "Collaborator"))
         {
-            _errorMessage = $"No user found with email '{_searchEmail}'. Please check the email address.";
+            _errorMessage = $"'{user.DisplayName}' has the Viewer role and cannot be assigned as an approver. Only Admin or Collaborator users may approve memos.";
             return;
         }
 
-        // Check for duplicates
+        // Duplicate guard (UserAutocomplete ExcludedEmails handles most cases,
+        // but UserId is the authoritative check)
         if (Approvers.Any(a => a.UserId == user.Id))
         {
             _errorMessage = "This user is already in the approver list.";
             return;
         }
 
-        // Add the approver
         var newApprovers = new List<ApproverInfo>(Approvers)
         {
             new ApproverInfo
             {
                 UserId = user.Id,
                 DisplayName = user.DisplayName,
-                Email = user.Email ?? _searchEmail
+                Email = user.Email ?? string.Empty
             }
         };
 
         await ApproversChanged.InvokeAsync(newApprovers);
-        _searchEmail = string.Empty;
     }
 
     private async Task RemoveApprover(ApproverInfo approver)

@@ -1,6 +1,7 @@
 using CorporateMemo.Domain.Entities;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using System.Text.Json;
 
 namespace CorporateMemo.Infrastructure.Data;
@@ -94,30 +95,39 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             // Create an index on Status for fast filtering (e.g., only Published memos)
             entity.HasIndex(m => m.Status);
 
-            // Store Tags as a JSON column in SQL Server
-            // This lets us store a List<string> without a separate Tags table
-            // The downside is that we cannot index or query individual tags as efficiently
+            // Reusable value comparer for List<string> JSON columns.
+            // EF Core needs this to detect when the list has changed (for change tracking).
+            // Without it, EF Core cannot tell whether Tags/Recipients were modified.
+            var stringListComparer = new ValueComparer<List<string>>(
+                // Equality: compare as JSON strings (order-sensitive)
+                (a, b) => JsonSerializer.Serialize(a, (JsonSerializerOptions?)null)
+                          == JsonSerializer.Serialize(b, (JsonSerializerOptions?)null),
+                // Hash code: hash the serialised JSON string
+                list => JsonSerializer.Serialize(list, (JsonSerializerOptions?)null).GetHashCode(),
+                // Snapshot: deep-copy the list so EF Core has an original to diff against
+                list => list.ToList());
+
+            // Store Tags as a JSON-serialised string column.
+            // No HasColumnType — EF Core auto-selects: TEXT for SQLite, nvarchar(max) for SQL Server.
             entity.Property(m => m.Tags)
                 .HasConversion(
-                    // When saving to DB: serialize the list to JSON string
                     tags => JsonSerializer.Serialize(tags, (JsonSerializerOptions?)null),
-                    // When reading from DB: deserialize JSON string back to list
-                    json => JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? new List<string>())
-                .HasColumnType("nvarchar(max)");
+                    json => JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? new List<string>(),
+                    stringListComparer);
 
-            // Store ToRecipients as a JSON column
+            // Store ToRecipients as a JSON-serialised string column.
             entity.Property(m => m.ToRecipients)
                 .HasConversion(
                     recipients => JsonSerializer.Serialize(recipients, (JsonSerializerOptions?)null),
-                    json => JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? new List<string>())
-                .HasColumnType("nvarchar(max)");
+                    json => JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? new List<string>(),
+                    stringListComparer);
 
-            // Store CcRecipients as a JSON column
+            // Store CcRecipients as a JSON-serialised string column.
             entity.Property(m => m.CcRecipients)
                 .HasConversion(
                     recipients => JsonSerializer.Serialize(recipients, (JsonSerializerOptions?)null),
-                    json => JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? new List<string>())
-                .HasColumnType("nvarchar(max)");
+                    json => JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? new List<string>(),
+                    stringListComparer);
 
             // Define the one-to-many relationship: one Memo has many ApprovalSteps
             entity.HasMany(m => m.ApprovalSteps)

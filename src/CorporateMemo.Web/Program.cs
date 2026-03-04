@@ -70,7 +70,14 @@ builder.Services.AddControllers();
 
 // Add Blazor Server — this enables the interactive Blazor Server model
 // Blazor Server renders components on the server and communicates via SignalR
-builder.Services.AddServerSideBlazor();
+// MaximumReceiveMessageSize is raised to 128 MB to support 100 MB file uploads.
+builder.Services.AddServerSideBlazor(options =>
+{
+    options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(5);
+}).AddHubOptions(hubOptions =>
+{
+    hubOptions.MaximumReceiveMessageSize = 128 * 1024 * 1024; // 128 MB
+});
 
 // Enable authentication state in Blazor components
 // This allows @attribute [Authorize] to work in .razor files
@@ -117,23 +124,98 @@ builder.Services.AddScoped<ICurrentUserService, BlazorCurrentUserService>();
 var app = builder.Build();
 
 // ============================================================================
-// 5. APPLY DATABASE MIGRATIONS ON STARTUP
+// 5. APPLY DATABASE SCHEMA ON STARTUP
 // ============================================================================
-// This automatically applies any pending EF Core migrations when the app starts.
-// In production, you may prefer to run migrations separately in CI/CD.
+// For SQLite (development): EnsureCreated() creates the schema from the EF model
+//   directly — no migration files needed, fast and zero-friction for dev.
+// For SQL Server (production): MigrateAsync() applies pending migrations from
+//   the Migrations folder in a controlled, versioned way.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CorporateMemo.Infrastructure.Data.ApplicationDbContext>();
     try
     {
-        // Apply all pending migrations automatically
-        await db.Database.MigrateAsync();
-        app.Logger.LogInformation("Database migrations applied successfully.");
+        // EnsureCreated: creates all tables if the database is empty.
+        // Idempotent — safe to run on every startup for both SQLite (dev) and
+        // Azure SQL (production). For schema migrations in future, replace with
+        // MigrateAsync() and add EF Core migration files.
+        await db.Database.EnsureCreatedAsync();
+        app.Logger.LogInformation("Database schema ensured.");
     }
     catch (Exception ex)
     {
-        app.Logger.LogError(ex, "An error occurred while applying database migrations.");
-        // Don't throw — let the app continue; it may work with an existing schema
+        app.Logger.LogError(ex, "An error occurred while initialising the database.");
+        throw; // Surface DB errors on startup so Azure health checks fail fast
+    }
+}
+
+// ============================================================================
+// 5b. SEED ROLES AND DEFAULT ADMIN USER
+// ============================================================================
+// On first run the database is empty. We create the standard roles and a default
+// admin account so that someone can log in and set up the system.
+// The seed is idempotent — it checks before inserting, so it is safe to run
+// every time the application starts.
+using (var scope = app.Services.CreateScope())
+{
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+    // --- Create roles -------------------------------------------------------
+    // Three roles: Admin, Collaborator, Viewer.
+    string[] roles = ["Admin", "Collaborator", "Viewer"];
+    foreach (var role in roles)
+    {
+        if (!await roleManager.RoleExistsAsync(role))
+        {
+            await roleManager.CreateAsync(new IdentityRole(role));
+            app.Logger.LogInformation("Created role: {Role}", role);
+        }
+    }
+
+    // --- Rename legacy "User" role to "Collaborator" (idempotent) ----------
+    // AspNetUserRoles links by RoleId, so renaming the row in AspNetRoles
+    // automatically covers all existing user-role assignments.
+    var legacyRole = await roleManager.FindByNameAsync("User");
+    if (legacyRole is not null)
+    {
+        legacyRole.Name = "Collaborator";
+        legacyRole.NormalizedName = "COLLABORATOR";
+        var renameResult = await roleManager.UpdateAsync(legacyRole);
+        if (renameResult.Succeeded)
+            app.Logger.LogInformation("Renamed legacy role 'User' to 'Collaborator'.");
+        else
+            app.Logger.LogError("Failed to rename 'User' role: {Errors}",
+                string.Join(", ", renameResult.Errors.Select(e => e.Description)));
+    }
+
+    // --- Create default admin account ---------------------------------------
+    // This account is for first-time login / demo purposes.
+    // Change the password immediately after first login in production.
+    const string adminEmail    = "admin@corporatememo.local";
+    const string adminPassword = "Admin1234";     // meets: 8+ chars, 1 digit
+
+    if (await userManager.FindByEmailAsync(adminEmail) is null)
+    {
+        var adminUser = new ApplicationUser
+        {
+            UserName    = adminEmail,
+            Email       = adminEmail,
+            DisplayName = "System Administrator",
+            EmailConfirmed = true,              // skip email-confirmation step
+        };
+
+        var result = await userManager.CreateAsync(adminUser, adminPassword);
+        if (result.Succeeded)
+        {
+            await userManager.AddToRoleAsync(adminUser, "Admin");
+            app.Logger.LogInformation("Seed admin account created: {Email}", adminEmail);
+        }
+        else
+        {
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            app.Logger.LogError("Failed to create seed admin account: {Errors}", errors);
+        }
     }
 }
 

@@ -1,0 +1,91 @@
+# =============================================================================
+# Corporate Memo System — Azure Deployment Pipeline
+#
+# Triggers on push to master branch or manual dispatch.
+# Builds the Docker image, pushes to Azure Container Registry,
+# and deploys to Azure Web App for Containers.
+#
+# Required GitHub secrets (Settings → Secrets → Actions):
+#   AZURE_CREDENTIALS          — Service principal JSON (az ad sp create-for-rbac output)
+#   REGISTRY_LOGIN_SERVER      — e.g. corporatememo.azurecr.io
+#   REGISTRY_USERNAME          — ACR admin username
+#   REGISTRY_PASSWORD          — ACR admin password
+#   AZURE_WEBAPP_NAME          — e.g. corporatememo-app
+#   AZURE_RESOURCE_GROUP       — e.g. corporatememo-rg
+# =============================================================================
+
+name: Build and Deploy to Azure
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: corporatememo
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Set up .NET (for running tests) ──────────────────────────────────────
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # ── Run tests ─────────────────────────────────────────────────────────────
+      - name: Restore & test
+        run: |
+          dotnet restore src/CorporateMemo.sln
+          dotnet test src/CorporateMemo.sln --no-restore -c Release \
+            --logger "trx;LogFileName=test-results.trx" \
+            --results-directory ./TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./TestResults/*.trx
+
+      # ── Build & push Docker image ─────────────────────────────────────────────
+      - name: Log in to Azure Container Registry
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ secrets.REGISTRY_LOGIN_SERVER }}
+          username:     ${{ secrets.REGISTRY_USERNAME }}
+          password:     ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push image
+        run: |
+          IMAGE_TAG=${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          IMAGE_LATEST=${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+
+          docker build -t $IMAGE_TAG -t $IMAGE_LATEST src/
+          docker push $IMAGE_TAG
+          docker push $IMAGE_LATEST
+
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      # ── Deploy to Azure Web App ───────────────────────────────────────────────
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy container to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name:       ${{ secrets.AZURE_WEBAPP_NAME }}
+          resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          images:         ${{ env.IMAGE_TAG }}
+
+      - name: Deployment complete
+        run: echo "Deployed ${{ env.IMAGE_TAG }} to ${{ secrets.AZURE_WEBAPP_NAME }}"

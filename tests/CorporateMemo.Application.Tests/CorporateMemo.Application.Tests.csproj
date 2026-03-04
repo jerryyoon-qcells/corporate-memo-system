@@ -26,8 +26,8 @@
     </PackageReference>
     <!-- Microsoft Test SDK required by dotnet test -->
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
-    <!-- Pin Microsoft.Extensions.Caching.Memory to a patched version (fixes NU1903 high severity vuln) -->
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.1" />
+    <!-- Pin Microsoft.Extensions.Caching.Memory to match the net10.0 transitive requirement -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.0" />
     <!-- Moq: mocking framework for faking dependencies in unit tests -->
     <PackageReference Include="Moq" Version="4.20.70" />
     <!-- FluentAssertions: readable assertion library for unit tests -->

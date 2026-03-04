@@ -3,7 +3,10 @@
     Handles user authentication using ASP.NET Core Identity's SignInManager.
     After successful login, redirects to the requested URL (or dashboard).
 *@
-@page "/login"
+@* Route removed — login is now the Razor Page Login.cshtml.
+   Blazor components cannot set HTTP cookies (response already committed over SignalR).
+   See Login.cshtml / Login.cshtml.cs for the working implementation. *@
+@page "/login-blazor-disabled"
 @layout CorporateMemo.Web.Components.MainLayout
 @using CorporateMemo.Domain.Entities
 @using Microsoft.AspNetCore.Identity

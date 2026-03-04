@@ -68,9 +68,12 @@ public class CreateMemoCommandHandler : IRequestHandler<CreateMemoCommand, MemoD
         // The sequence starts at 1 and increments for each memo on the same day
         var sequenceNumber = existingCount + 1;
 
-        // Generate the memo number using the domain service
-        // Format: [username]-[YYYYMMDD]-[seq] → e.g., "jsmith-20260302-001"
-        var memoNumber = MemoNumberGenerator.Generate(userName, DateTime.UtcNow, sequenceNumber);
+        // Generate the memo number using the domain service.
+        // UserName is typically the full email address (e.g. "jerry.yoon@qcells.com").
+        // Use only the local part (before '@') so the number reads "jerryyoon-20260302-001"
+        // rather than including the domain. SanitiseUsername strips dots and other non-alnum chars.
+        var localPart = userName.Contains('@') ? userName[..userName.IndexOf('@')] : userName;
+        var memoNumber = MemoNumberGenerator.Generate(localPart, DateTime.UtcNow, sequenceNumber);
 
         _logger.LogInformation("Creating new memo '{MemoNumber}' for user {UserId}", memoNumber, userId);
 

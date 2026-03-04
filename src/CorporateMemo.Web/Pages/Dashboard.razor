@@ -360,6 +360,29 @@ else
             _activeTab = TabParam;
 
         await LoadCurrentTab();
+        _initialized = true;
+    }
+
+    private bool _initialized;
+
+    /// <summary>
+    /// Called whenever parameters change — including query string changes from sidebar navigation.
+    /// When the user is already on the Dashboard and clicks "My Documents" or "My Approvals",
+    /// Blazor performs a client-side navigation (same component, new query string).
+    /// OnInitializedAsync does NOT re-run in that case, so we react here instead.
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_initialized) return; // Let OnInitializedAsync handle the first load
+
+        var requested = TabParam ?? TabAllDocs;
+        if (requested != _activeTab &&
+            (requested == TabAllDocs || requested == TabMyDocs || requested == TabApprovals))
+        {
+            _activeTab = requested;
+            _currentPage = 1;
+            await LoadCurrentTab();
+        }
     }
 
     private async Task SwitchTab(string tab)

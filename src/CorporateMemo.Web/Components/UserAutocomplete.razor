@@ -1,0 +1,241 @@
+@*
+    UserAutocomplete.razor — Reusable user-search input with dropdown autocomplete.
+
+    Usage:
+        <UserAutocomplete Placeholder="Search by name or email..."
+                          ExcludedEmails="_alreadyAddedEmails"
+                          OnUserSelected="HandleUserSelected" />
+
+    Behaviour:
+    - Dropdown appears after the user types 4 or more characters.
+    - Results match DisplayName OR Email (case-insensitive, contains).
+    - Keyboard navigation: ArrowDown/Up moves the highlight, Enter selects,
+      Escape closes the dropdown.
+    - Mouse click selects an item.
+    - On selection: fires OnUserSelected and clears the input.
+    - If Enter is pressed with no dropdown item highlighted, falls back to an
+      email lookup via UserManager.FindByEmailAsync (manual entry fallback).
+    - ExcludedEmails prevents already-added users from appearing in the list.
+*@
+@using CorporateMemo.Domain.Entities
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<ApplicationUser> UserManager
+
+<div class="position-relative user-autocomplete">
+
+    @* Search input *@
+    <input type="text"
+           class="form-control"
+           placeholder="@Placeholder"
+           value="@_inputValue"
+           @oninput="HandleInput"
+           @onkeydown="HandleKeyDown"
+           @onblur="HandleBlur"
+           autocomplete="off"
+           aria-label="@Placeholder"
+           aria-autocomplete="list"
+           aria-haspopup="listbox"
+           aria-expanded="@(_showDropdown && _suggestions.Count > 0 ? "true" : "false")" />
+
+    @* Inline error *@
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="text-danger small mt-1">
+            <i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i>@_error
+        </div>
+    }
+
+    @* Dropdown *@
+    @if (_showDropdown)
+    {
+        @if (_isSearching)
+        {
+            <div class="autocomplete-menu" role="status" aria-live="polite">
+                <div class="autocomplete-item text-muted">
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Searching...
+                </div>
+            </div>
+        }
+        else if (_suggestions.Count > 0)
+        {
+            <ul class="autocomplete-menu" role="listbox" aria-label="User suggestions">
+                @for (int i = 0; i < _suggestions.Count; i++)
+                {
+                    var user = _suggestions[i];
+                    var idx = i;
+                    <li class="autocomplete-item @(idx == _activeIndex ? "autocomplete-item-active" : "")"
+                        role="option"
+                        aria-selected="@(idx == _activeIndex)"
+                        @onclick="async () => await SelectUser(user)">
+                        <span class="fw-semibold">@user.DisplayName</span>
+                        <small class="@(idx == _activeIndex ? "text-white-50" : "text-muted") ms-2">@user.Email</small>
+                    </li>
+                }
+            </ul>
+        }
+        else if (_inputValue.Length >= MinChars)
+        {
+            <div class="autocomplete-menu">
+                <div class="autocomplete-item text-muted fst-italic">
+                    No users found matching &ldquo;@_inputValue&rdquo;
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private const int MinChars = 4;
+
+    /// <summary>Placeholder text for the search input.</summary>
+    [Parameter] public string Placeholder { get; set; } = "Type name or email to search...";
+
+    /// <summary>Emails already added — these users are excluded from the dropdown.</summary>
+    [Parameter] public IEnumerable<string> ExcludedEmails { get; set; } = [];
+
+    /// <summary>Fired when the user selects a person from the dropdown or via Enter-key lookup.</summary>
+    [Parameter] public EventCallback<ApplicationUser> OnUserSelected { get; set; }
+
+    private string _inputValue = string.Empty;
+    private string _typedValue = string.Empty;   // preserves what the user actually typed
+    private List<ApplicationUser> _suggestions = new();
+    private bool _showDropdown;
+    private bool _isSearching;
+    private int _activeIndex = -1;
+    private string? _error;
+    private CancellationTokenSource? _searchCts;
+
+    private async Task HandleInput(ChangeEventArgs e)
+    {
+        _inputValue = e.Value?.ToString() ?? string.Empty;
+        _typedValue = _inputValue;   // keep in sync with what the user actually typed
+        _error = null;
+        _activeIndex = -1;
+
+        // Cancel any pending search triggered by earlier keystrokes
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
+
+        if (_inputValue.Length < MinChars)
+        {
+            _showDropdown = false;
+            _suggestions.Clear();
+            return;
+        }
+
+        // Debounce: wait 300 ms before hitting the database
+        try { await Task.Delay(300, token); }
+        catch (TaskCanceledException) { return; }
+
+        if (token.IsCancellationRequested) return;
+
+        _isSearching = true;
+        _showDropdown = true;
+        StateHasChanged();
+
+        var lower = _inputValue.ToLowerInvariant();
+        var excluded = new HashSet<string>(ExcludedEmails, StringComparer.OrdinalIgnoreCase);
+
+        _suggestions = UserManager.Users
+            .AsEnumerable()
+            .Where(u =>
+                (u.DisplayName?.ToLowerInvariant().Contains(lower) == true ||
+                 u.Email?.ToLowerInvariant().Contains(lower) == true) &&
+                !excluded.Contains(u.Email ?? string.Empty))
+            .Take(8)
+            .ToList();
+
+        _isSearching = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                if (_showDropdown && _suggestions.Count > 0)
+                {
+                    _activeIndex = Math.Min(_activeIndex + 1, _suggestions.Count - 1);
+                    _inputValue = _suggestions[_activeIndex].DisplayName;
+                }
+                break;
+
+            case "ArrowUp":
+                if (_showDropdown && _suggestions.Count > 0)
+                {
+                    if (_activeIndex <= 0)
+                    {
+                        _activeIndex = -1;
+                        _inputValue = _typedValue;   // back above first item — restore typed text
+                    }
+                    else
+                    {
+                        _activeIndex--;
+                        _inputValue = _suggestions[_activeIndex].DisplayName;
+                    }
+                }
+                break;
+
+            case "Enter":
+                if (_showDropdown && _activeIndex >= 0 && _activeIndex < _suggestions.Count)
+                    await SelectUser(_suggestions[_activeIndex]);
+                else if (_showDropdown && _suggestions.Count > 0)
+                    await SelectUser(_suggestions[0]);   // select first when nothing highlighted
+                else
+                    await LookupByEmailAndSelect();     // manual email entry fallback
+                break;
+
+            case "Escape":
+                _showDropdown = false;
+                _activeIndex = -1;
+                _inputValue = _typedValue;   // restore what the user typed before navigating
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Delay before hiding the dropdown so that a click on a list item fires first.
+    /// Without the delay the blur event fires before the click, hiding the dropdown
+    /// before the click handler can run.
+    /// </summary>
+    private async Task HandleBlur()
+    {
+        await Task.Delay(150);
+        _showDropdown = false;
+        StateHasChanged();
+    }
+
+    private async Task SelectUser(ApplicationUser user)
+    {
+        _inputValue = string.Empty;
+        _typedValue = string.Empty;
+        _showDropdown = false;
+        _suggestions.Clear();
+        _activeIndex = -1;
+        _error = null;
+        await OnUserSelected.InvokeAsync(user);
+    }
+
+    /// <summary>
+    /// Fallback for when the user types a full email address and presses Enter
+    /// without selecting from the dropdown. Looks the address up in Identity.
+    /// </summary>
+    private async Task LookupByEmailAndSelect()
+    {
+        if (string.IsNullOrWhiteSpace(_inputValue)) return;
+
+        var user = await UserManager.FindByEmailAsync(_inputValue.Trim());
+        if (user is null)
+        {
+            _error = $"No user found with email '{_inputValue}'. Select from the dropdown list.";
+            return;
+        }
+
+        var excluded = new HashSet<string>(ExcludedEmails, StringComparer.OrdinalIgnoreCase);
+        if (excluded.Contains(user.Email ?? string.Empty)) return;
+
+        await SelectUser(user);
+    }
+}

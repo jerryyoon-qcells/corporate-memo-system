@@ -39,17 +39,32 @@ public static class InfrastructureServiceExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // Register EF Core with SQL Server provider
-        // The connection string is named "DefaultConnection" in appsettings.json
+        // Register EF Core — auto-detect provider from the connection string format.
+        // SQLite: "Data Source=corporatememo.db" — file-based, zero install, used for local dev.
+        // SQL Server: "Server=...;Database=..." — used for staging and production.
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
         services.AddDbContext<ApplicationDbContext>(options =>
         {
-            options.UseSqlServer(
-                configuration.GetConnectionString("DefaultConnection"),
-                // Configure SQL Server options — retry on transient failures (network glitches, etc.)
-                sqlOptions => sqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 3,
-                    maxRetryDelay: TimeSpan.FromSeconds(10),
-                    errorNumbersToAdd: null));
+            // Detect SQLite by looking for the simple "Data Source=<file>" pattern
+            // (no semicolons means it's not a multi-part SQL Server connection string)
+            if (connectionString.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase)
+                && !connectionString.Contains(';', StringComparison.Ordinal))
+            {
+                // SQLite provider: great for development — no server required
+                options.UseSqlite(connectionString);
+            }
+            else
+            {
+                // SQL Server provider: used for production deployments
+                // EnableRetryOnFailure retries on transient errors (e.g. network blips)
+                options.UseSqlServer(connectionString,
+                    sqlOptions => sqlOptions.EnableRetryOnFailure(
+                        maxRetryCount: 3,
+                        maxRetryDelay: TimeSpan.FromSeconds(10),
+                        errorNumbersToAdd: null));
+            }
         });
 
         // Register repositories — Scoped means one instance per HTTP request

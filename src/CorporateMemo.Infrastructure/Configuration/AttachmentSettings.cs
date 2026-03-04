@@ -25,7 +25,7 @@ public class AttachmentSettings : IAttachmentSettings
     /// Gets or sets the maximum allowed file size per attachment in megabytes.
     /// Default: 10 MB per the requirements.
     /// </summary>
-    public int MaxFileSizeMb { get; set; } = 10;
+    public int MaxFileSizeMb { get; set; } = 100;
 
     /// <summary>
     /// Gets the maximum file size in bytes (computed from MaxFileSizeMb).
@@ -40,7 +40,8 @@ public class AttachmentSettings : IAttachmentSettings
     /// </summary>
     public List<string> AllowedExtensions { get; set; } = new()
     {
-        "pdf", "docx", "xlsx", "png", "jpg", "jpeg", "gif", "bmp"
+        "pdf", "docx", "xlsx", "png", "jpg", "jpeg", "gif", "bmp",
+        "txt", "csv", "pptx", "zip", "msg"
     };
 
     // IAttachmentSettings explicit implementation — exposes the list as IReadOnlyList
