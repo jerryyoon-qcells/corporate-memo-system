@@ -1,0 +1,98 @@
+Corporate Memo System - Requirements Document
+
+1. Overview
+The Corporate Memo System is designed to facilitate internal communication by allowing users to create, manage, and distribute memos with configurable approval workflows and secure visibility controls. The system includes memo creation, user dashboards, approval routing, and content access control based on roles and confidentiality.
+For MVP, we would expect 2, 3, 5, and 6 as Proof-of-Concept deliverable.
+
+2. Memo Creation
+2.1 Metadata Fields
+* Memo Number: Auto-generated using format [username]-[YYYYMMDD]-[sequence].
+* Title: Free text field supporting special characters, up to 100 characters.
+* Author Name & Email: Auto-filled from login credentials.
+* Date Created: Timestamp at initial save.
+* Approved Date: Timestamp upon final approval.
+* Content: Rich text format, max 1000 characters.
+* Hash Tags: User-defined keywords for search.
+* Distribution List:
+o To / CC: Auto-suggested emails from internal user database.
+* Approval Status: Enum [Draft, Pending Approval, Approved, Rejected, Published].
+* Confidential: Boolean flag indicating restricted content access.
+2.2 Attachments
+* Memo can have attachments optionally.
+* Support for multiple file uploads (PDF, DOCX, XLSX, images, etc.)
+* Optional file preview
+* Configurable max file size per policy
+
+3. Approval Workflow
+3.1 Approver Assignment
+* Optional Approvers:
+o If none assigned, memo is auto-published after save
+o If assigned:
+* Notification email with approve/reject links sent to approvers
+* Status: “Pending Approval”
+3.2 Approval Behavior
+* Memo is not listed publicly (All Documents) until fully approved
+* Memo remains accessible via direct URL or creator’s dashboard
+* Approval status and history visible within the memo
+* Each approver’s decision is tracked individually
+
+4. Confidential Memo Handling
+4.1 Visibility Rules
+* If Confidential:
+o Metadata (title, author, tags) shown in All Documents
+o Content & attachments visible only to:
+* Memo creator
+* Approvers
+* To / CC recipients
+* Admins
+* Unauthorized users receive message: “This is a confidential memo. You do not have permission to view its content.”
+4.2 Search Behavior
+* Confidential memos appear in search results with limited metadata
+* Content access restricted per rules above
+
+5. User Dashboard
+5.1 Layout
+* Tabs:
+o All Documents
+o My Documents (includes drafts and submitted memos)
+o My Approvals (pending items for approval)
+* List View:
+o Columns: Memo Number, Title, Author, Date, Status, Tags
+o Filtering and sorting options
+5.2 Search
+* Simple Search: Keyword match (title, content, tags)
+* Advanced Search:
+o Filters by date, author, tag, status, approvers, confidential flag
+
+6. Notifications
+* Email notifications for:
+o Approval requests
+o Status updates
+o Memo publication
+* Optional real-time in-app alerts
+
+7. Additional Features
+7.1 Draft Handling
+* Save as draft functionality
+* Auto-save during memo editing
+7.2 Version Control
+* Maintain history of edits
+* Option to restore previous versions
+7.3 Permissions & Roles
+* Admin: Full access to all memos and controls
+* User: Create, edit, view, approve memos as per assignment
+* Viewer: Read-only access to published memos
+7.4 Export Options
+* Export memo as PDF
+* Print-friendly version
+7.5 Audit Trail
+* Log actions: creation, edits, approvals, views, unauthorized access attempts
+7.6 Mobile Responsiveness
+* Responsive UI for memo viewing and approval on mobile devices
+
+8. Future Considerations (Optional Enhancements)
+* @Mentions within content to notify users
+* Tag suggestions based on frequently used terms
+* Integration with enterprise calendar or notification systems
+
+End of Requirements Document

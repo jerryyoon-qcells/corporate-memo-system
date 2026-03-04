@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet test \"src/CorporateMemo.sln\" --verbosity normal)",
+      "Bash(dotnet test \"src/CorporateMemo.sln\" --verbosity normal --no-build)"
+    ]
+  }
+}

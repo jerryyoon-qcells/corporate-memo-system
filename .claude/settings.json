@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/jerry/Projects/**)",
+      "Read(//c/Users/jerry/.claude/**)",
+      "Bash(dotnet new sln -n CorporateMemo -o src --force)",
+      "Bash(dotnet sln add CorporateMemo.Domain/CorporateMemo.Domain.csproj CorporateMemo.Application/CorporateMemo.Application.csproj CorporateMemo.Infrastructure/CorporateMemo.Infrastructure.csproj CorporateMemo.Web/CorporateMemo.Web.csproj ../tests/CorporateMemo.Domain.Tests/CorporateMemo.Domain.Tests.csproj ../tests/CorporateMemo.Application.Tests/CorporateMemo.Application.Tests.csproj)",
+      "Bash(dotnet build src/CorporateMemo.sln)",
+      "Bash(dotnet --version)",
+      "Bash(dotnet sln --help)",
+      "Bash(dotnet new sln -n CorporateMemo --format sln --force)",
+      "Bash(dotnet sln CorporateMemo.sln add CorporateMemo.Domain/CorporateMemo.Domain.csproj CorporateMemo.Application/CorporateMemo.Application.csproj CorporateMemo.Infrastructure/CorporateMemo.Infrastructure.csproj CorporateMemo.Web/CorporateMemo.Web.csproj ../tests/CorporateMemo.Domain.Tests/CorporateMemo.Domain.Tests.csproj ../tests/CorporateMemo.Application.Tests/CorporateMemo.Application.Tests.csproj)",
+      "Bash(dotnet ef migrations add InitialCreate --project \"../CorporateMemo.Infrastructure/CorporateMemo.Infrastructure.csproj\" --startup-project \"CorporateMemo.Web.csproj\" --context ApplicationDbContext)",
+      "Bash(dotnet tool install --global dotnet-ef)",
+      "Bash(dotnet tool uninstall --global dotnet-ef)",
+      "Bash(dotnet tool install --global dotnet-ef --version 8.0.0)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\jerry\\.claude\\skills",
+      "C:\\Users\\jerry\\Projects\\ADO extension_AI Dashboard\\.claude\\skills\\develop",
+      "C:\\Users\\jerry\\Projects\\Internal Memo System"
+    ]
+  }
+}
