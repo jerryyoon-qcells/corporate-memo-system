@@ -34,6 +34,15 @@ else if (_notFound)
         <a href="/" class="btn btn-primary">Go to Dashboard</a>
     </div>
 }
+else if (_accessDenied)
+{
+    <div class="text-center py-5">
+        <i class="bi bi-lock-fill text-warning" style="font-size: 3rem;" aria-hidden="true"></i>
+        <h1 class="fs-2 mt-3">Confidential Memo</h1>
+        <p class="text-muted">This memo is confidential. You are not in the recipient list and cannot view its contents.</p>
+        <a href="/" class="btn btn-primary">Go to Dashboard</a>
+    </div>
+}
 else if (_memo != null)
 {
     @* Breadcrumb *@
@@ -315,6 +324,7 @@ else if (_memo != null)
     private MemoDto? _memo;
     private bool _isLoading = true;
     private bool _notFound;
+    private bool _accessDenied;
     private string? _successMessage;
     private string? _errorMessage;
     private bool _isActing;
@@ -349,6 +359,10 @@ else if (_memo != null)
         catch (Domain.Exceptions.MemoNotFoundException)
         {
             _notFound = true;
+        }
+        catch (Domain.Exceptions.UnauthorizedMemoAccessException)
+        {
+            _accessDenied = true;
         }
         catch (Exception ex)
         {

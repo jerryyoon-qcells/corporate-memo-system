@@ -29,8 +29,19 @@ public class GetMemoByIdQueryHandlerTests
         _mapper = config.CreateMapper();
     }
 
-    private GetMemoByIdQueryHandler CreateHandler() =>
-        new(_repoMock.Object, _mapper, NullLogger<GetMemoByIdQueryHandler>.Instance);
+    private GetMemoByIdQueryHandler CreateHandler(ICurrentUserService? currentUserService = null)
+    {
+        if (currentUserService is null)
+        {
+            // Default: admin user — can access any memo including confidential ones
+            var adminMock = new Mock<ICurrentUserService>();
+            adminMock.Setup(u => u.IsAdmin).Returns(true);
+            adminMock.Setup(u => u.UserId).Returns("admin-id");
+            adminMock.Setup(u => u.UserEmail).Returns("admin@test.com");
+            currentUserService = adminMock.Object;
+        }
+        return new(_repoMock.Object, _mapper, currentUserService, NullLogger<GetMemoByIdQueryHandler>.Instance);
+    }
 
     // ============================================================
     // Happy path
